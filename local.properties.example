@@ -1,0 +1,22 @@
+# ──────────────────────────────────────────────────────────────────────
+# local.properties — local-only config, NEVER commit to git
+# Copy this file to local.properties and fill in real values:
+#   cp local.properties.example local.properties
+# ──────────────────────────────────────────────────────────────────────
+
+# Android SDK location (filled in by scripts/install-sdk.sh)
+#   On vultr Linux, typically:
+#     sdk.dir=/opt/android-sdk
+#   On macOS dev machine, typically:
+#     sdk.dir=/Users/<you>/Library/Android/sdk
+sdk.dir=/opt/android-sdk
+
+# ──────────────────────────────────────────────────────────────────────
+# Telegram API credentials (REQUIRED)
+# ──────────────────────────────────────────────────────────────────────
+# Get yours at: https://my.telegram.org/apps
+# You MUST use your own account — sharing is forbidden by Telegram ToS
+# and will get your session kicked.
+# ──────────────────────────────────────────────────────────────────────
+TG_API_ID=28653083
+TG_API_HASH=6e4b99e9f8c7473d8ea1274541279255

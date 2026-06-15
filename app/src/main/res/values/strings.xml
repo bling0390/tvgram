@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Telegram TV</string>
+    <string name="app_full_name">Telegram for Android TV</string>
+
+    <!-- Login screen -->
+    <string name="login_title">Sign in to Telegram</string>
+    <string name="login_subtitle">Open Telegram on your phone, then scan this QR code</string>
+    <string name="login_waiting">Waiting for confirmation…</string>
+    <string name="login_failed">Login failed: %1$s</string>
+
+    <!-- Home -->
+    <string name="tab_channels">Channels</string>
+    <string name="tab_groups">Groups</string>
+    <string name="tab_private">Private</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Chat -->
+    <string name="chat_loading">Loading media…</string>
+    <string name="chat_empty">No images or videos in this chat yet</string>
+    <string name="chat_position">%1$d / %2$d</string>
+
+    <!-- Player -->
+    <string name="player_buffering">Buffering…</string>
+    <string name="player_error">Playback error: %1$s</string>
+</resources>

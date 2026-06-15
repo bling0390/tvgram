@@ -1,0 +1,40 @@
+# Build artifacts
+build/
+.gradle/
+out/
+*.apk
+*.aab
+*.dex
+*.class
+
+# TDLib native libs — large (28MB × 4 ABIs) and versioned per release;
+# we publish them as GitHub Release assets, not source. See D-027.
+# To rebuild locally, see docs/BUILD.md "Native libraries".
+app/src/main/jniLibs/**/*.so
+
+# Local config (NEVER commit — contains TG API credentials)
+local.properties
+keystore/
+*.jks
+*.keystore
+keystore.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Logs / temp
+*.log
+*.tmp
+*.bak
+captures/
+.cxx/
+
+# Gradle
+gradle-app.setting
+gradle/wrapper/gradle-wrapper.jar.lck
+
+# OS
+Thumbs.db

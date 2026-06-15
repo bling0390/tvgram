@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  tv_banner.xml — TV launcher banner (320x180 dp).
+  Required for leanback launcher entries.
+  Vector drawable, scales cleanly.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <!-- Background gradient -->
+    <path
+        android:pathData="M0,0 L320,0 L320,180 L0,180 Z"
+        android:fillColor="#101010" />
+
+    <!-- Telegram-blue circle (T-logo backdrop) -->
+    <path
+        android:pathData="M160,90 m-50,0 a50,50 0 1,0 100,0 a50,50 0 1,0 -100,0"
+        android:fillColor="#5288C1" />
+
+    <!-- T-mark -->
+    <path
+        android:pathData="M140,70 L180,70 L180,78 L165,78 L165,110 L155,110 L155,78 L140,78 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Wordmark -->
+    <path
+        android:pathData="M70,140 L250,140 L250,150 L70,150 Z"
+        android:fillColor="#5288C1" />
+    <path
+        android:pathData="M85,158 L235,158 L235,162 L85,162 Z"
+        android:fillColor="#7AB2FF" />
+
+</vector>
