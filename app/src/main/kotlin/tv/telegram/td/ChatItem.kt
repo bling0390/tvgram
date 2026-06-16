@@ -5,7 +5,7 @@ import android.graphics.Bitmap
 /**
  * ChatType — classification of a TDLib Chat for our 3-tab layout.
  *
- *   Channel    → public/supergroup with `isChannel == true` and a single
+ *   Channel    → public/supergroup with `is_channel == true` and a single
  *                poster (channels) or open discussion (supergroup-as-channel)
  *   Group      → basic group or non-broadcast supergroup
  *   Private    → 1:1 chat
@@ -22,7 +22,10 @@ enum class ChatType { Channel, Group, Private, SavedMessages, Unknown }
  *   type           → from chat.type (basicGroup/supergroup/private/secret)
  *   unreadCount    → from chat.unread_count
  *   lastMessageText→ best-effort preview of the most recent message
- *   photo          → loaded async; null until downloaded
+ *   photoSmallFileId → the small (≤100px) chat photo file_id for avatar
+ *                      (null if no photo)
+ *   photoBigFileId   → the large version (≥ 640px) for fullscreen
+ *   photo           → loaded async; null until downloaded
  */
 data class ChatItem(
     val id: Long,
@@ -30,5 +33,7 @@ data class ChatItem(
     val type: ChatType,
     val unreadCount: Int,
     val lastMessageText: String?,
+    val photoSmallFileId: Int? = null,
+    val photoBigFileId: Int? = null,
     val photo: Bitmap? = null,
 )

@@ -132,6 +132,8 @@ dependencies {
     // ExoPlayer for video playback
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.common)
+    implementation(libs.androidx.media3.datasource)
 
     // Coil for image loading
     implementation(libs.coil.compose)

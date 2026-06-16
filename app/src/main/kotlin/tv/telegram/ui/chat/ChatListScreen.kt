@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,12 +28,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import tv.telegram.td.ChatItem
 import tv.telegram.td.ChatType
+import tv.telegram.td.FileDownloadState
 import tv.telegram.ui.MainViewModel
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
@@ -121,7 +126,11 @@ fun ChatListScreen(viewModel: MainViewModel) {
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(20.dp)) {
             item {
-                ChatRow(filtered.sortedByDescending { it.unreadCount })
+                ChatRow(
+                    items = filtered.sortedByDescending { it.unreadCount },
+                    onSelect = { id -> viewModel.openChat(id) },
+                    viewModel = viewModel,
+                )
             }
             // Stats line at the bottom
             item {
@@ -137,18 +146,18 @@ fun ChatListScreen(viewModel: MainViewModel) {
 }
 
 @Composable
-private fun ChatRow(items: List<ChatItem>) {
+private fun ChatRow(items: List<ChatItem>, onSelect: (Long) -> Unit, viewModel: MainViewModel) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         items(items, key = { it.id }) { chat ->
-            ChatCard(chat)
+            ChatCard(chat, onClick = { onSelect(chat.id) }, viewModel = viewModel)
         }
     }
 }
 
 @Composable
-private fun ChatCard(chat: ChatItem) {
+private fun ChatCard(chat: ChatItem, onClick: () -> Unit, viewModel: MainViewModel) {
     Card(
-        onClick = { /* MVP: opening a chat comes in v0.4.0 */ },
+        onClick = onClick,
         colors = CardDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
@@ -164,7 +173,7 @@ private fun ChatCard(chat: ChatItem) {
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AvatarPlaceholder(chat)
+                AvatarPlaceholder(chat, viewModel)
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = chat.type.label(),
@@ -187,9 +196,20 @@ private fun ChatCard(chat: ChatItem) {
 }
 
 @Composable
-private fun AvatarPlaceholder(chat: ChatItem) {
+private fun AvatarPlaceholder(chat: ChatItem, viewModel: MainViewModel) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val photoId = chat.photoSmallFileId
+    val localPath = if (photoId != null) {
+        (viewModel.fileStateFor(photoId) as? FileDownloadState.Local)?.path
+    } else null
+    LaunchedEffect(photoId) {
+        if (photoId != null && localPath == null) {
+            viewModel.ensureMediaFile(photoId, priority = 8)
+        }
+    }
+
     val color = when (chat.type) {
-        ChatType.Channel -> Color(0xFF5288C1)  // Telegram blue
+        ChatType.Channel -> Color(0xFF5288C1)
         ChatType.Group -> Color(0xFF4CAF50)
         ChatType.Private -> Color(0xFFFF9800)
         ChatType.SavedMessages -> Color(0xFF9C27B0)
@@ -203,7 +223,19 @@ private fun AvatarPlaceholder(chat: ChatItem) {
             .background(color),
         contentAlignment = Alignment.Center,
     ) {
-        Text(initial, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        if (localPath != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(ctx)
+                    .data(java.io.File(localPath))
+                    .crossfade(true)
+                    .build(),
+                contentDescription = chat.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)),
+            )
+        } else {
+            Text(initial, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 

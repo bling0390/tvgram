@@ -170,12 +170,32 @@ class TdChatRepository(
             "chatTypeSavedMessages" -> ChatType.SavedMessages
             else -> ChatType.Unknown
         }
+
+        // Pull chat photo small id for the avatar (smallest size with file)
+        val photo = resp.optJSONObject("photo")
+        var small: Int? = null
+        if (photo != null) {
+            val arr = photo.optJSONArray("sizes")
+            if (arr != null) {
+                var best: JSONObject? = null
+                var bestW = Int.MAX_VALUE
+                for (i in 0 until arr.length()) {
+                    val s = arr.getJSONObject(i)
+                    if (s.optJSONObject("photo") == null) continue
+                    val w = s.optInt("width", 0)
+                    if (w in 1..100 && w < bestW) { best = s; bestW = w }
+                }
+                if (best != null) small = best.optJSONObject("photo")?.optInt("id")
+            }
+        }
+
         return ChatItem(
             id = chatId,
             title = title,
             type = type,
             unreadCount = unread,
             lastMessageText = null,
+            photoSmallFileId = small,
         )
     }
 
