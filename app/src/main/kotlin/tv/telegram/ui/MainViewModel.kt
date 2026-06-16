@@ -37,6 +37,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val authState: StateFlow<AuthState> = auth.state
     val chatList = chatRepo.items
     val chatListLoaded = chatRepo.loaded
+    val searchQuery = chatRepo.searchQuery
+    val searchSearching = chatRepo.searching
 
     val mediaItems = mediaRepo.items
     val mediaLoaded = mediaRepo.loaded
@@ -79,6 +81,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeChat() {
         mediaRepo.close()
+    }
+
+    fun setSearchQuery(query: String) {
+        chatRepo.setSearchQuery(query)
     }
 
     fun fileStateFor(fileId: Int): FileDownloadState? = fileRepo.stateFor(fileId)

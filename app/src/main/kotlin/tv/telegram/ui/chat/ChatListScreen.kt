@@ -2,6 +2,7 @@
 
 package tv.telegram.ui.chat
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import kotlinx.coroutines.delay
 import tv.telegram.td.ChatItem
 import tv.telegram.td.ChatType
 import tv.telegram.td.FileDownloadState
@@ -50,19 +54,54 @@ import androidx.tv.material3.Text
 /**
  * ChatListScreen — main TV surface after login.
  *
- * SmartTube-style layout:
- *   - 3 tabs at top: Channels / Groups / Private
- *   - Each tab: a horizontal row of large chat cards
- *   - D-pad navigates between cards; OK enters a chat
+ * v0.6.0 adds a search bar at the top:
+ *   - D-pad up from the grid focuses the search bar
+ *   - OK on the bar opens an on-screen D-pad keyboard (overlay)
+ *   - Type Latin letters; results filter live (debounced 250ms)
+ *   - Back closes the keyboard, then closes the search bar
+ *   - Clearing the query (or pressing CLEAR) returns to the full list
  *
- * For v0.3.0 we don't yet enter a chat (chat detail comes in v0.4.0).
+ * Layout (when keyboard closed):
+ *   Telegram TV
+ *   [🔍 Search chats...]   (always visible, shows current query)
+ *   [Channels] [Groups] [Private]
+ *   <4-col grid of chat cards>
  */
 @Composable
 fun ChatListScreen(viewModel: MainViewModel) {
     val chats by viewModel.chatList.collectAsStateWithLifecycle()
     val loaded by viewModel.chatListLoaded.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val searchSearching by viewModel.searchSearching.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Channels", "Groups", "Private")
+    var keyboardOpen by remember { mutableStateOf(false) }
+
+    // The local edit buffer (what the user is typing). The viewModel's
+    // searchQuery is the debounced source of truth that drives filtering.
+    // We commit editBuffer -> viewModel after 250ms of inactivity.
+    var editBuffer by remember { mutableStateOf("") }
+    var lastEditAt by remember { mutableStateOf(0L) }
+
+    // Debounce: 250ms after the last keystroke, push to viewModel.
+    LaunchedEffect(editBuffer) {
+        if (editBuffer == searchQuery) return@LaunchedEffect
+        lastEditAt = System.currentTimeMillis()
+        delay(250L)
+        viewModel.setSearchQuery(editBuffer)
+    }
+
+    // External clears (e.g. pressing CLEAR on the keyboard) should sync
+    // the edit buffer too.
+    LaunchedEffect(searchQuery) {
+        if (searchQuery != editBuffer && !keyboardOpen) {
+            editBuffer = searchQuery
+        }
+    }
+
+    BackHandler(enabled = keyboardOpen) {
+        keyboardOpen = false
+    }
 
     val filtered = when (selectedTab) {
         0 -> chats.filter { it.type == ChatType.Channel }
@@ -70,81 +109,163 @@ fun ChatListScreen(viewModel: MainViewModel) {
         else -> chats.filter { it.type == ChatType.Private }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 48.dp, vertical = 24.dp)
-    ) {
-        Text(
-            text = "Telegram TV",
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(16.dp))
-
-        TabRow(
-            selectedTabIndex = selectedTab,
-            modifier = Modifier.fillMaxWidth(),
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 48.dp, vertical = 24.dp)
         ) {
-            tabs.forEachIndexed { idx, label ->
-                Tab(
-                    selected = selectedTab == idx,
-                    onFocus = { selectedTab = idx },
-                    onClick = { selectedTab = idx },
-                    colors = TabDefaults.underlinedIndicatorTabColors(),
-                ) {
+            Text(
+                text = "Telegram TV",
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(16.dp))
+
+            SearchBar(
+                query = editBuffer,
+                searching = searchSearching,
+                isFocused = keyboardOpen,
+                onClick = { keyboardOpen = true },
+            )
+            Spacer(Modifier.height(16.dp))
+
+            TabRow(
+                selectedTabIndex = selectedTab,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                tabs.forEachIndexed { idx, label ->
+                    Tab(
+                        selected = selectedTab == idx,
+                        onFocus = { selectedTab = idx },
+                        onClick = { selectedTab = idx },
+                        colors = TabDefaults.underlinedIndicatorTabColors(),
+                    ) {
+                        Text(
+                            text = label,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontSize = 18.sp,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+
+            if (!loaded) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Loading chats…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else if (filtered.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    val msg = when {
+                        searchQuery.isNotEmpty() -> "No chats matching \"$searchQuery\""
+                        else -> "No ${tabs[selectedTab].lowercase()} yet"
+                    }
+                    Text(msg, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 20.sp)
+                }
+            } else {
+                // Sort: by lastMessageDate desc, then by unreadCount desc.
+                // Chats with lastMessageDate=0 (never messaged) go to the bottom.
+                val sorted = filtered.sortedWith(
+                    compareByDescending<ChatItem> { it.lastMessageDate > 0 }
+                        .thenByDescending { it.lastMessageDate }
+                        .thenByDescending { it.unreadCount }
+                )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    ChatGrid(
+                        items = sorted,
+                        onSelect = { id -> viewModel.openChat(id) },
+                        viewModel = viewModel,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    val statsLine = buildString {
+                        append("${filtered.size} ${tabs[selectedTab].lowercase()}")
+                        if (searchQuery.isNotEmpty()) append(" matching \"$searchQuery\"")
+                        append(" · ${chats.size} total")
+                    }
                     Text(
-                        text = label,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 18.sp,
+                        statsLine,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 14.sp,
                     )
                 }
             }
         }
-        Spacer(Modifier.height(24.dp))
 
-        if (!loaded) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Loading chats…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            return@Column
+        // ── On-screen keyboard overlay ──────────────────────────────
+        if (keyboardOpen) {
+            DpadKeyboard(
+                onChar = { c ->
+                    editBuffer = editBuffer + c
+                },
+                onBackspace = {
+                    if (editBuffer.isNotEmpty()) {
+                        editBuffer = editBuffer.dropLast(1)
+                    }
+                },
+                onClear = {
+                    editBuffer = ""
+                },
+                onSearch = {
+                    // Commit immediately and close the keyboard
+                    viewModel.setSearchQuery(editBuffer)
+                    keyboardOpen = false
+                },
+                onClose = { keyboardOpen = false },
+            )
         }
+    }
+}
 
-        if (filtered.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    "No ${tabs[selectedTab].lowercase()} yet",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 20.sp,
-                )
-            }
-            return@Column
-        }
-
-        // Sort: by lastMessageDate desc, then by unreadCount desc.
-        // Chats with lastMessageDate=0 (never messaged) go to the bottom.
-        val sorted = filtered.sortedWith(
-            compareByDescending<ChatItem> { it.lastMessageDate > 0 }
-                .thenByDescending { it.lastMessageDate }
-                .thenByDescending { it.unreadCount }
-        )
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            ChatGrid(
-                items = sorted,
-                onSelect = { id -> viewModel.openChat(id) },
-                viewModel = viewModel,
+/**
+ * Search bar at the top of ChatListScreen. D-pad up from the grid lands here.
+ * OK opens the keyboard.
+ */
+@Composable
+private fun SearchBar(
+    query: String,
+    searching: Boolean,
+    isFocused: Boolean,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        scale = CardDefaults.scale(focusedScale = 1.02f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "🔍",
+                fontSize = 20.sp,
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = if (query.isEmpty()) "Search chats..." else query + "_",
+                color = if (query.isEmpty())
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                else
+                    MaterialTheme.colorScheme.onSurface,
+                fontSize = 20.sp,
+                fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Normal,
                 modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "${filtered.size} ${tabs[selectedTab].lowercase()} · ${chats.size} total",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 14.sp,
-            )
+            if (searching) {
+                Text(
+                    "searching…",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 14.sp,
+                )
+            }
         }
     }
 }
@@ -272,6 +393,137 @@ private fun UnreadBadge(count: Int) {
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
         )
+    }
+}
+
+/**
+ * DpadKeyboard — on-screen Latin keyboard for TV search input.
+ *
+ * Layout (5 cols × 6 rows = 30 keys):
+ *   Row 0: A B C D E
+ *   Row 1: F G H I J
+ *   Row 2: K L M N O
+ *   Row 3: P Q R S T
+ *   Row 4: U V W X Y
+ *   Row 5: Z BKSP CLEAR SEARCH CLOSE
+ *
+ * D-pad navigation works naturally because LazyVerticalGrid's item
+ * traversal is row-major. The first key (A) auto-focuses when the
+ * keyboard opens.
+ */
+@Composable
+private fun DpadKeyboard(
+    onChar: (Char) -> Unit,
+    onBackspace: () -> Unit,
+    onClear: () -> Unit,
+    onSearch: () -> Unit,
+    onClose: () -> Unit,
+) {
+    // First-key focus requester; auto-focus "A" when the keyboard opens.
+    val firstKey = remember { FocusRequester() }
+    LaunchedEffect(Unit) { firstKey.requestFocus() }
+
+    // Backdrop
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Card(
+            onClick = { /* swallow backdrop clicks */ },
+            modifier = Modifier
+                .fillMaxWidth(0.8f)
+                .height(360.dp),
+            colors = CardDefaults.colors(containerColor = Color(0xFF1E1E1E)),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+            ) {
+                Text(
+                    "Type to search",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(16.dp))
+                // 5 cols × 6 rows; use a plain Column of Rows for explicit control.
+                val rows = listOf(
+                    listOf("A", "B", "C", "D", "E"),
+                    listOf("F", "G", "H", "I", "J"),
+                    listOf("K", "L", "M", "N", "O"),
+                    listOf("P", "Q", "R", "S", "T"),
+                    listOf("U", "V", "W", "X", "Y"),
+                )
+                rows.forEachIndexed { rowIdx, row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        row.forEach { letter ->
+                            KeyButton(
+                                label = letter,
+                                onClick = { onChar(letter[0]) },
+                                modifier = Modifier.weight(1f),
+                                fr = if (rowIdx == 0 && letter == "A") firstKey else null,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+                // Final row: Z + 4 control keys
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    KeyButton("Z", onClick = { onChar('Z') }, modifier = Modifier.weight(1f))
+                    KeyButton("⌫", onClick = onBackspace, modifier = Modifier.weight(1f))
+                    KeyButton("CLR", onClick = onClear, modifier = Modifier.weight(1f))
+                    KeyButton(
+                        "SEARCH",
+                        onClick = onSearch,
+                        modifier = Modifier.weight(1.2f),
+                        accent = true,
+                    )
+                    KeyButton("CLOSE", onClick = onClose, modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KeyButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    accent: Boolean = false,
+    fr: FocusRequester? = null,
+) {
+    Card(
+        onClick = onClick,
+        scale = CardDefaults.scale(focusedScale = 1.10f),
+        colors = CardDefaults.colors(
+            containerColor = if (accent) MaterialTheme.colorScheme.primary
+                            else Color(0xFF2C2C2C),
+        ),
+        modifier = modifier
+            .height(48.dp)
+            .let { if (fr != null) it.focusRequester(fr) else it },
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                label,
+                color = Color.White,
+                fontSize = if (label.length > 1) 12.sp else 18.sp,
+                fontWeight = if (accent) FontWeight.Bold else FontWeight.SemiBold,
+            )
+        }
     }
 }
 
