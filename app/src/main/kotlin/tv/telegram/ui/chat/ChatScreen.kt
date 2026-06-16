@@ -202,7 +202,15 @@ fun ChatScreen(viewModel: MainViewModel, chatId: Long, onBack: () -> Unit) {
                 val realIndex = mediaItems.indexOfFirst { it.messageId == item.messageId }
                 MediaCard(
                     item = item,
-                    onClick = { openedIndex = realIndex },
+                    onClick = {
+                        if (item.type == MediaType.Video) {
+                            // v0.7.0: video → dedicated PlayerScreen
+                            viewModel.openPlayer(realIndex)
+                        } else {
+                            // Photo → in-place FullScreenMedia (legacy viewer)
+                            openedIndex = realIndex
+                        }
+                    },
                     viewModel = viewModel,
                 )
             }

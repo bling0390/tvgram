@@ -476,3 +476,55 @@ regular files. `libtdjson.so` is ~30 MB but already on-disk after install.
 - All four ABI .so files are bundled under `app/src/main/jniLibs/`
 - TdClient.kt was rewritten to use the JSON protocol
 - TgTvApp.kt was updated to pass `context` to TdClient (for nativeLibraryDir lookup)
+
+---
+
+## D-014 · Dedicated Player screen + Media3 1.7 + compileSdk 35 · 2026-06-16
+
+**Decision:** v0.7.0-debug introduces a dedicated `PlayerScreen` route
+for video playback, separate from the photo viewer. Video cards in the
+chat grid jump straight to the player; photo cards still use
+`FullScreenMedia` in ChatScreen. PlayerSurface (Compose-native) replaces
+the legacy PlayerView. Stack: Media3 1.7.1, AGP 8.4.2, Gradle 8.6,
+compileSdk 35. `targetSdk` stays 34 (runtime behavior unchanged).
+
+**Why:**
+- v0.6's `PlayerView` is an Android `View`; its D-pad controller behaves
+  more like a phone app. For a TV product this is the wrong primitive.
+  `PlayerSurface` from `androidx.media3.ui.compose` is Compose-native
+  and integrates cleanly with `Modifier.focusable` for D-pad focus.
+- Mixing photos and videos in one viewer is convenient code-wise but
+  blurs two product intents: "look at this image" vs "play this video".
+  Splitting the routes lets the player ship video-only affordances
+  (10s skip, playback speed, resume position, auto-advance to next
+  video) without affecting the photo path.
+- Media3 1.4.x is the last branch compatible with compileSdk 34. We
+  wanted `ui-compose` for v0.7.0, so we had to take the compileSdk
+  bump as a coupled change.
+
+**Trade-offs accepted:**
+- compileSdk 35 emits a "compile against newer SDK" warning under
+  AGP 8.4.2 (officially tested up to 34). Doesn't affect runtime; no
+  device rejects the APK. Bumping to AGP 8.5+ would silence the
+  warning but adds churn. We accept the warning.
+- Universal APK grows by ~5 MB (Media3 1.7 + ui-compose). Worth it.
+- The chat media grid already pre-downloads thumbnails and full files
+  via TdFileRepository; the new PlayerScreen re-uses that path instead
+  of building a parallel download pipeline.
+
+**Scope of v0.7.0:**
+- ✅ Independent PlayerScreen route (`ui/player/PlayerScreen.kt`)
+- ✅ PlayerSurface (Compose) replaces PlayerView
+- ✅ D-pad controller: ← / → seek 10s, OK toggles play, Menu cycles
+  speed (1.0 → 1.25 → 1.5 → 2.0), Back closes
+- ✅ Auto-advance to next video on ENDED (skips photos)
+- ✅ Per-fileId resume position (in-memory)
+- ✅ Controller overlay auto-hides after 4s of inactivity
+- ✅ Sticky top hint: "← Back · ◀ ▶ ±10s · OK Play/Pause · Menu Speed"
+
+**Out of scope (deferred to v0.7.1+):**
+- ❌ Persisted resume positions (currently in-memory only)
+- ❌ Volume up / down on Up / Down (stubbed, no audio focus wiring)
+- ❌ Clickable progress bar to seek
+- ❌ Picture-in-picture, casting
+- ❌ Subtitle track selection

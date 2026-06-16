@@ -54,6 +54,61 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _currentChatTitle = MutableStateFlow<String?>(null)
     val currentChatTitle: StateFlow<String?> = _currentChatTitle.asStateFlow()
 
+    // ── Player state (v0.7.0) ──────────────────────────────────────
+    // Index into mediaItems of the video currently being played in
+    // the dedicated PlayerScreen. null = not in player. Photos don't
+    // open the player — they stay in FullScreenMedia.
+    private val _playerMediaIndex = MutableStateFlow<Int?>(null)
+    val playerMediaIndex: StateFlow<Int?> = _playerMediaIndex.asStateFlow()
+
+    // Playback speed (1.0 = normal). Cycles through [1.0, 1.25, 1.5, 2.0].
+    private val _playerPlaybackSpeed = MutableStateFlow(1.0f)
+    val playerPlaybackSpeed: StateFlow<Float> = _playerPlaybackSpeed.asStateFlow()
+
+    // Resumed positions per fileId (ms). In-memory only for v0.7.0.
+    private val _playerResumePositions = MutableStateFlow<Map<Int, Long>>(emptyMap())
+    val playerResumePositions: StateFlow<Map<Int, Long>> = _playerResumePositions.asStateFlow()
+
+    /** Open the dedicated PlayerScreen for the video at [index] in [mediaItems]. */
+    fun openPlayer(index: Int) {
+        _playerMediaIndex.value = index
+    }
+
+    /** Close the PlayerScreen and release the index handle. */
+    fun closePlayer() {
+        _playerMediaIndex.value = null
+    }
+
+    /** Step the player to another media item (direction ±1). */
+    fun stepPlayer(delta: Int) {
+        val cur = _playerMediaIndex.value ?: return
+        _playerMediaIndex.value = cur + delta
+    }
+
+    /** Cycle the playback speed: 1.0 → 1.25 → 1.5 → 2.0 → 1.0. */
+    fun cyclePlayerSpeed(): Float {
+        val next = when (_playerPlaybackSpeed.value) {
+            1.0f  -> 1.25f
+            1.25f -> 1.5f
+            1.5f  -> 2.0f
+            else  -> 1.0f
+        }
+        _playerPlaybackSpeed.value = next
+        return next
+    }
+
+    /** Save the current play position for the given fileId (ms). */
+    fun savePlayerPosition(fileId: Int, positionMs: Long) {
+        if (positionMs <= 0L) return
+        _playerResumePositions.value =
+            _playerResumePositions.value + (fileId to positionMs)
+    }
+
+    /** Clear resume position (e.g. user watched to the end). */
+    fun clearPlayerPosition(fileId: Int) {
+        _playerResumePositions.value = _playerResumePositions.value - fileId
+    }
+
     init {
         // Mirror chat list → chatTitles
         viewModelScope.launch {

@@ -18,14 +18,14 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace  = "tv.telegram"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "tv.telegram"
         minSdk        = 21
         targetSdk     = 34
-        versionCode   = 6
-        versionName   = "0.6.0"
+        versionCode   = 7
+        versionName   = "0.7.0"
 
         // Telegram API credentials come from local.properties (gitignored)
         val localProps = Properties().apply {
@@ -134,6 +134,7 @@ dependencies {
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.common)
     implementation(libs.androidx.media3.datasource)
+    implementation(libs.androidx.media3.ui.compose)
 
     // Coil for image loading
     implementation(libs.coil.compose)

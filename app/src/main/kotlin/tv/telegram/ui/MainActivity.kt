@@ -12,6 +12,7 @@ import tv.telegram.td.AuthState
 import tv.telegram.ui.chat.ChatListScreen
 import tv.telegram.ui.chat.ChatScreen
 import tv.telegram.ui.login.QrLoginScreen
+import tv.telegram.ui.player.PlayerScreen
 import tv.telegram.ui.theme.TvgramTheme
 
 /**
@@ -45,10 +46,17 @@ class MainActivity : ComponentActivity() {
 private fun AppRoot(viewModel: MainViewModel) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     val openChatId by viewModel.currentChatId.collectAsStateWithLifecycle()
+    val playerIndex by viewModel.playerMediaIndex.collectAsStateWithLifecycle()
 
     when {
         authState !is AuthState.Ready -> {
             QrLoginScreen(viewModel = viewModel)
+        }
+        // Dedicated Player route (v0.7.0). Only reached from ChatScreen
+        // when the user opens a video (NOT a photo). Sits on top of the
+        // chat layer in the route stack.
+        openChatId != null && playerIndex != null -> {
+            PlayerScreen(viewModel = viewModel)
         }
         openChatId != null -> {
             ChatScreen(
