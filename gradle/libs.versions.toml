@@ -23,6 +23,7 @@ compose-tv-material   = "1.0.0-alpha10"
 # Media
 media3             = "1.7.1"
 coil               = "2.7.0"
+desugar-jdk-libs   = "2.1.2"
 
 # TDLib (D-002, D-026, D-027) — JSON interface via native lib
 #   No Maven dependency. Native .so is bundled under app/src/main/jniLibs/
@@ -67,6 +68,9 @@ androidx-media3-ui-compose  = { module = "androidx.media3:media3-ui-compose",   
 
 # Coil (image loading)
 coil-compose               = { module = "io.coil-kt:coil-compose",                    version.ref = "coil" }
+
+# Java 8+ API desugaring for media3 1.7 (uses java.time on API 21-25)
+desugar-jdk-libs          = { module = "com.android.tools:desugar_jdk_libs",        version.ref = "desugar-jdk-libs" }
 
 # TDLib
 # tdlib                      = { module = "ca.denisab85:tdlib",                        version.ref = "tdlib" }

@@ -24,8 +24,8 @@ android {
         applicationId = "tv.telegram"
         minSdk        = 21
         targetSdk     = 34
-        versionCode   = 7
-        versionName   = "0.7.0"
+        versionCode   = 8
+        versionName   = "0.7.1"
 
         // Telegram API credentials come from local.properties (gitignored)
         val localProps = Properties().apply {
@@ -86,6 +86,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions { jvmTarget = "17" }
 
@@ -128,6 +129,9 @@ dependencies {
     // Compose for TV (D-006, D-013)
     implementation(libs.androidx.tv.foundation)
     implementation(libs.androidx.tv.material)
+
+    // Java 8+ API desugaring (required for media3 1.7 on minSdk 21-25)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     // ExoPlayer for video playback
     implementation(libs.androidx.media3.exoplayer)
