@@ -157,6 +157,9 @@ class TdChatRepository(
         }
         val title = resp.optString("title").ifEmpty { "Unnamed chat" }
         val unread = resp.optInt("unread_count", 0)
+        // chat.last_message is the full Message; .date is epoch seconds.
+        // 0 if there's never been a message in the chat.
+        val lastMessageDate = resp.optJSONObject("last_message")?.optInt("date", 0) ?: 0
         val typeObj = resp.optJSONObject("type")
         val typeStr = typeObj?.optString("@type") ?: "unknown"
 
@@ -195,6 +198,7 @@ class TdChatRepository(
             type = type,
             unreadCount = unread,
             lastMessageText = null,
+            lastMessageDate = lastMessageDate,
             photoSmallFileId = small,
         )
     }

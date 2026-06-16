@@ -22,6 +22,7 @@ enum class ChatType { Channel, Group, Private, SavedMessages, Unknown }
  *   type           → from chat.type (basicGroup/supergroup/private/secret)
  *   unreadCount    → from chat.unread_count
  *   lastMessageText→ best-effort preview of the most recent message
+ *   lastMessageDate → epoch seconds of the most recent message; 0 if none
  *   photoSmallFileId → the small (≤100px) chat photo file_id for avatar
  *                      (null if no photo)
  *   photoBigFileId   → the large version (≥ 640px) for fullscreen
@@ -33,6 +34,7 @@ data class ChatItem(
     val type: ChatType,
     val unreadCount: Int,
     val lastMessageText: String?,
+    val lastMessageDate: Int = 0,
     val photoSmallFileId: Int? = null,
     val photoBigFileId: Int? = null,
     val photo: Bitmap? = null,

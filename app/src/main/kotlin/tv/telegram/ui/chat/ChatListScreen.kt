@@ -14,9 +14,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -124,30 +124,47 @@ fun ChatListScreen(viewModel: MainViewModel) {
             return@Column
         }
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            item {
-                ChatRow(
-                    items = filtered.sortedByDescending { it.unreadCount },
-                    onSelect = { id -> viewModel.openChat(id) },
-                    viewModel = viewModel,
-                )
-            }
-            // Stats line at the bottom
-            item {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "${filtered.size} ${tabs[selectedTab].lowercase()} · ${chats.size} total",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 14.sp,
-                )
-            }
+        // Sort: by lastMessageDate desc, then by unreadCount desc.
+        // Chats with lastMessageDate=0 (never messaged) go to the bottom.
+        val sorted = filtered.sortedWith(
+            compareByDescending<ChatItem> { it.lastMessageDate > 0 }
+                .thenByDescending { it.lastMessageDate }
+                .thenByDescending { it.unreadCount }
+        )
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            ChatGrid(
+                items = sorted,
+                onSelect = { id -> viewModel.openChat(id) },
+                viewModel = viewModel,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "${filtered.size} ${tabs[selectedTab].lowercase()} · ${chats.size} total",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 14.sp,
+            )
         }
     }
 }
 
 @Composable
-private fun ChatRow(items: List<ChatItem>, onSelect: (Long) -> Unit, viewModel: MainViewModel) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+private fun ChatGrid(
+    items: List<ChatItem>,
+    onSelect: (Long) -> Unit,
+    viewModel: MainViewModel,
+    modifier: Modifier = Modifier,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(4),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = 0.dp, vertical = 8.dp,
+        ),
+        modifier = modifier.fillMaxSize(),
+    ) {
         items(items, key = { it.id }) { chat ->
             ChatCard(chat, onClick = { onSelect(chat.id) }, viewModel = viewModel)
         }

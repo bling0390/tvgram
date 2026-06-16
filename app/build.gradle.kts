@@ -24,8 +24,8 @@ android {
         applicationId = "tv.telegram"
         minSdk        = 21
         targetSdk     = 34
-        versionCode   = 1
-        versionName   = "0.1.0"
+        versionCode   = 5
+        versionName   = "0.5.0"
 
         // Telegram API credentials come from local.properties (gitignored)
         val localProps = Properties().apply {

@@ -18,12 +18,14 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Flow:
  *   1. User picks a chat (chatId) from ChatListScreen
- *   2. We call openChat(chatId), then getChatHistory(chatId, fromMessageId, offset, limit)
+ *   2. We call openAndLoad(chatId), then getChatHistory(chatId, fromMessageId, offset, limit)
  *   3. For each message, check if it has .content.photo / .content.video
  *   4. If yes, project to MediaItem and append
- *   5. Continue paginating until no more messages
+ *   5. Continue paginating on demand via loadMore()
  *
- * MVP: load the most recent 100 messages and filter to media-only.
+ * v0.5.0: pagination. Page size = 100 messages. loadMore() fetches the next
+ * older page using `from_message_id = <oldest_seen_id>`. Stops when
+ * the server returns fewer than `limit` messages, or the response is empty.
  */
 class TdMediaRepository(
     private val client: TdClient = TdClient,
@@ -38,6 +40,19 @@ class TdMediaRepository(
 
     private val _loaded = MutableStateFlow(false)
     val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _loadingMore = MutableStateFlow(false)
+    val loadingMore: StateFlow<Boolean> = _loadingMore.asStateFlow()
+
+    /**
+     * True once we've paginated and found no more messages.
+     * Lets the UI hide the "load more" affordance.
+     */
+    private val _exhausted = MutableStateFlow(false)
+    val exhausted: StateFlow<Boolean> = _exhausted.asStateFlow()
 
     private val pendingGet = ConcurrentHashMap<String, CompletableDeferred<JSONObject>>()
 
@@ -54,7 +69,7 @@ class TdMediaRepository(
             val d = pendingGet.remove(extra)
             if (d != null) { d.complete(obj); return }
         }
-        // New message in a visible chat → append
+        // New message in a visible chat → prepend
         if (type == "updateNewMessage" || type == "updateMessageContent") {
             scope.launch {
                 val chatId = _currentChatId.value ?: return@launch
@@ -79,13 +94,15 @@ class TdMediaRepository(
     }
 
     /**
-     * Open a chat and load its media. Resets state for a new chat.
+     * Open a chat and load its most recent page of media. Resets state for a new chat.
      */
-    suspend fun openAndLoad(chatId: Long, limit: Int = 200) {
-        Log.i(TAG, "openAndLoad(chatId=$chatId)")
+    suspend fun openAndLoad(chatId: Long, limit: Int = 100) {
+        Log.i(TAG, "openAndLoad(chatId=$chatId, limit=$limit)")
         _currentChatId.value = chatId
         _items.value = emptyList()
         _loaded.value = false
+        _exhausted.value = false
+        _error.value = null
 
         // openChat — let TDLib know we're now actively viewing it
         client.send(JSONObject().apply {
@@ -93,7 +110,6 @@ class TdMediaRepository(
             put("chat_id", chatId)
         })
 
-        // getChatHistory with offset=0, from_message_id=0 → most recent `limit` messages
         val resp = sendAndAwait(JSONObject().apply {
             put("@type", "getChatHistory")
             put("chat_id", chatId)
@@ -103,20 +119,86 @@ class TdMediaRepository(
         })
         if (resp == null) {
             Log.w(TAG, "getChatHistory timed out")
+            _error.value = "Loading timed out. Press OK to retry."
             _loaded.value = true
             return
         }
         if (resp.optString("@type") != "messages") {
-            Log.w(TAG, "getChatHistory returned ${resp.optString("@type")}")
+            val errMsg = resp.optString("message").ifEmpty { resp.optString("@type") }
+            Log.w(TAG, "getChatHistory returned ${resp.optString("@type")}: $errMsg")
+            _error.value = "Error: $errMsg"
             _loaded.value = true
             return
         }
         val arr = resp.optJSONArray("messages") ?: org.json.JSONArray()
         val items = (0 until arr.length())
             .mapNotNull { i -> parseMessage(arr.getJSONObject(i), chatId) }
-        Log.i(TAG, "Loaded ${items.size} media items from ${arr.length()} messages")
+        Log.i(TAG, "Loaded ${items.size} media items from ${arr.length()} messages (page 1)")
         _items.value = items
         _loaded.value = true
+        if (items.isEmpty() || arr.length() < limit) {
+            // Either nothing to load, or the server already gave us everything
+            _exhausted.value = true
+        }
+    }
+
+    /**
+     * Fetch the next page of older messages and append media items.
+     * No-op if already loading, or if the current chat is exhausted.
+     */
+    suspend fun loadMore(limit: Int = 100) {
+        if (_loadingMore.value) {
+            Log.d(TAG, "loadMore: already in flight")
+            return
+        }
+        val chatId = _currentChatId.value
+        if (chatId == null) {
+            Log.w(TAG, "loadMore: no current chat")
+            return
+        }
+        if (_exhausted.value) {
+            Log.d(TAG, "loadMore: already exhausted")
+            return
+        }
+        val current = _items.value
+        if (current.isEmpty()) {
+            Log.w(TAG, "loadMore: no items yet; call openAndLoad first")
+            return
+        }
+        // Oldest message id = the last one (TDLib returns newest-first).
+        val oldestMessageId = current.last().messageId
+
+        _loadingMore.value = true
+        try {
+            val resp = sendAndAwait(JSONObject().apply {
+                put("@type", "getChatHistory")
+                put("chat_id", chatId)
+                put("from_message_id", oldestMessageId)
+                put("offset", 0)
+                put("limit", limit)
+            })
+            if (resp == null) {
+                Log.w(TAG, "loadMore: getChatHistory timed out")
+                return
+            }
+            if (resp.optString("@type") != "messages") {
+                Log.w(TAG, "loadMore: unexpected type ${resp.optString("@type")}")
+                return
+            }
+            val arr = resp.optJSONArray("messages") ?: org.json.JSONArray()
+            val newItems = (0 until arr.length())
+                .mapNotNull { i -> parseMessage(arr.getJSONObject(i), chatId) }
+            Log.i(TAG, "loadMore: got ${newItems.size} media items from ${arr.length()} messages")
+            // De-dup by messageId
+            val seen = current.map { it.messageId }.toHashSet()
+            val merged = current + newItems.filter { it.messageId !in seen }
+            _items.value = merged
+            if (newItems.isEmpty() || arr.length() < limit) {
+                _exhausted.value = true
+            }
+        } finally {
+            _loadingMore.value = false
+        }
     }
 
     fun close() {
@@ -128,6 +210,7 @@ class TdMediaRepository(
         _currentChatId.value = null
         _items.value = emptyList()
         _loaded.value = false
+        _error.value = null
     }
 
     private fun parseMessage(message: JSONObject, chatId: Long): MediaItem? {

@@ -40,6 +40,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val mediaItems = mediaRepo.items
     val mediaLoaded = mediaRepo.loaded
+    val mediaError = mediaRepo.error
+    val mediaLoadingMore = mediaRepo.loadingMore
+    val mediaExhausted = mediaRepo.exhausted
     val currentChatId = mediaRepo.currentChatId
 
     // title cache: chatId -> title (populated when ChatListScreen fetches them)
@@ -68,6 +71,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openChat(chatId: Long) {
         viewModelScope.launch { mediaRepo.openAndLoad(chatId) }
+    }
+
+    fun loadMoreMedia() {
+        viewModelScope.launch { mediaRepo.loadMore() }
     }
 
     fun closeChat() {
