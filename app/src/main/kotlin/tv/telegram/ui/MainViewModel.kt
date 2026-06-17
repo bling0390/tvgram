@@ -69,6 +69,64 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _playerResumePositions = MutableStateFlow<Map<Int, Long>>(emptyMap())
     val playerResumePositions: StateFlow<Map<Int, Long>> = _playerResumePositions.asStateFlow()
 
+    // ── Nav rail state (v0.8.0) ──────────────────────────────────
+    // Which top-level section is currently visible. Search / Chats / Settings.
+    // NavRail order is Search -> Chats -> Settings, but Chats is the primary
+    // action so it gets initial focus.
+    enum class NavSection { Search, Chats, Settings }
+
+    private val _navSection = MutableStateFlow(NavSection.Chats)
+    val navSection: StateFlow<NavSection> = _navSection.asStateFlow()
+
+    // Which chat is currently selected in the Chats module's left sidebar.
+    // null = no chat selected (right pane shows placeholder).
+    // Separate from mediaRepo.currentChatId (which is the deep chat the
+    // media grid is loading); sidebar selection is the user-facing pick.
+    private val _sidebarSelectedChatId = MutableStateFlow<Long?>(null)
+    val sidebarSelectedChatId: StateFlow<Long?> = _sidebarSelectedChatId.asStateFlow()
+
+    // ── Settings state (v0.8.0) ───────────────────────────────
+    // Stored in SharedPreferences. v0.8.0 keeps both as in-memory StateFlow
+    // mirrors; persistence is handled by [SettingsRepository].
+    private val _themeMode = MutableStateFlow(ThemeMode.Dark)
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    private val _language = MutableStateFlow(Language.English)
+    val language: StateFlow<Language> = _language.asStateFlow()
+
+    fun selectNavSection(section: NavSection) {
+        _navSection.value = section
+    }
+
+    fun selectSidebarChat(chatId: Long?) {
+        _sidebarSelectedChatId.value = chatId
+        if (chatId != null) {
+            openChat(chatId)
+        } else {
+            closeChat()
+        }
+    }
+
+    fun setTheme(mode: ThemeMode) {
+        _themeMode.value = mode
+        SettingsRepository.setTheme(getApplication(), mode)
+    }
+
+    fun setLanguage(lang: Language) {
+        _language.value = lang
+        SettingsRepository.setLanguage(getApplication(), lang)
+    }
+
+    /** Logout: clear TDLib session + nav back to login. v0.8.0 just clears
+     *  sidebar selection and player index; the auth state going non-Ready
+     *  is what routes us back to QrLoginScreen. */
+    fun logout() {
+        closeChat()
+        closePlayer()
+        _sidebarSelectedChatId.value = null
+        auth.cancelQrLogin()
+    }
+
     /** Open the dedicated PlayerScreen for the video at [index] in [mediaItems]. */
     fun openPlayer(index: Int) {
         _playerMediaIndex.value = index
@@ -124,6 +182,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         // Boot QR
         viewModelScope.launch { auth.requestQrLogin() }
+        // Hydrate settings from SharedPreferences
+        val (theme, lang) = SettingsRepository.hydrate(getApplication())
+        _themeMode.value = theme
+        _language.value = lang
     }
 
     fun openChat(chatId: Long) {

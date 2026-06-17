@@ -528,3 +528,57 @@ compileSdk 35. `targetSdk` stays 34 (runtime behavior unchanged).
 - ❌ Clickable progress bar to seek
 - ❌ Picture-in-picture, casting
 - ❌ Subtitle track selection
+
+---
+
+## D-015 · Nav rail layout (B-plan) · 2026-06-17
+
+**Decision:** v0.8.0-debug collapses the old "ChatListScreen + ChatScreen"
+two-screen model into a single `HomeScreen` with an 80dp left NavRail
+and three sections:
+
+  - 🔍 Search   — full-page global search with the v0.6 D-pad keyboard
+  - 💬 Chats    — left sidebar (chat list) + right pane (media grid)
+  - ⚙ Settings  — 5-row settings (Account / Language / Theme / About / Sign out)
+
+**Why:**
+- SmartTube / YouTube TV pattern is the de-facto TV-side information
+  density reference. A vertical nav rail is visually compact and gives
+  D-pad users a single "I'm in section X" affordance.
+- The old v0.6 ChatListScreen had a `TabRow` filter (Channels/Groups/
+  Private) and a 4-col grid; that worked but pushed chat selection into
+  "click into a list, click again into a media grid" which is two
+  navigation steps for a 3-meter-lean-back use case. The new sidebar
+  collapses that to one step (left/right between sidebar and grid).
+- Settings is now reachable from a fixed entry point, so the user
+  can sign out / change language without an obscure gesture.
+
+**Trade-offs accepted:**
+- Three focus zones (NavRail / sidebar / media grid) instead of two.
+  D-pad users have to learn ← / → to switch zones; not entirely
+  discoverable, but the persistent NavRail highlights the active
+  section.
+- The v0.6 TabRow (Channels / Groups / Private) is removed. Chat
+  list now shows all chat types in a single sort. We accept this
+  because most TV users have < 100 chats; if this becomes painful
+  we can re-introduce the filter as a header chip inside the sidebar.
+
+**Scope of v0.8.0:**
+- ✅ HomeScreen with NavRail (Search / Chats / Settings)
+- ✅ SearchScreen (lifted from v0.6 ChatListScreen, full-page)
+- ✅ ChatsScreen (sidebar + media grid; videos → PlayerScreen,
+   photos → in-place FullScreenMedia)
+- ✅ SettingsScreen with 5 rows
+- ✅ SettingsRepository: SharedPreferences-backed enum persistence
+- ✅ Theme: TvgramTheme now accepts ThemeMode; v0.8.0 ships Dark only
+- ✅ Old ChatListScreen.kt + ChatScreen.kt removed
+
+**Out of scope (deferred to v0.8.1+):**
+- ❌ Light theme / System theme
+- ❌ Non-English UI strings (v0.8.0 UI is hardcoded English; only
+   Language.English is wired up)
+- ❌ Real TG user info on the Account row (currently shows a
+   placeholder "Account ID: ..."; needs TDLib `getMe` plumbing)
+- ❌ Real sign-out (v0.8.0 calls TdAuth.cancelQrLogin() but does
+   not clear the local TDLib database or restart the process)
+- ❌ Sidebar search / type-ahead within the Chats module

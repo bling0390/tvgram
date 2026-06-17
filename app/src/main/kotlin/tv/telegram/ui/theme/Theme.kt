@@ -25,9 +25,17 @@ private val TvgramDarkColors = darkColorScheme(
 )
 
 @Composable
-fun TvgramTheme(content: @Composable () -> Unit) {
+fun TvgramTheme(
+    themeMode: tv.telegram.ui.ThemeMode = tv.telegram.ui.ThemeMode.Dark,
+    content: @Composable () -> Unit,
+) {
+    // v0.8.0: only Dark is wired up. When Light / System are added in
+    // v0.8.1+ this is where the dispatch will live.
+    val scheme = when (themeMode) {
+        tv.telegram.ui.ThemeMode.Dark -> TvgramDarkColors
+    }
     MaterialTheme(
-        colorScheme = TvgramDarkColors,
+        colorScheme = scheme,
         content = content,
     )
 }

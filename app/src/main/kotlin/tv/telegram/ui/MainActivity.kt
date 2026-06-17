@@ -9,8 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tv.telegram.td.AuthState
-import tv.telegram.ui.chat.ChatListScreen
-import tv.telegram.ui.chat.ChatScreen
+import tv.telegram.ui.home.HomeScreen
 import tv.telegram.ui.login.QrLoginScreen
 import tv.telegram.ui.player.PlayerScreen
 import tv.telegram.ui.theme.TvgramTheme
@@ -19,12 +18,13 @@ import tv.telegram.ui.theme.TvgramTheme
  * Single Activity, Compose-driven.
  *
  * Top-level navigation:
- *   AuthState.Ready + no chat open         → ChatListScreen
- *   AuthState.Ready + chat open            → ChatScreen(chatId)
- *   otherwise                              → QrLoginScreen
+ *   AuthState not Ready                    → QrLoginScreen
+ *   AuthState.Ready + player open          → PlayerScreen
+ *   AuthState.Ready (no player)            → HomeScreen
+ *                                          (Search / Chats / Settings via NavRail)
  *
- * We deliberately keep this as a simple when expression (no NavHost lib)
- * to avoid adding navigation-compose as a dep for v0.4.0.
+ * v0.8.0 collapsed the old "ChatListScreen" + "ChatScreen" into a single
+ * HomeScreen with an internal NavRail; the old two-screen model is gone.
  */
 class MainActivity : ComponentActivity() {
 
@@ -35,7 +35,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            TvgramTheme {
+            val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+            TvgramTheme(themeMode = themeMode) {
                 AppRoot(viewModel = viewModel)
             }
         }
@@ -45,28 +46,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppRoot(viewModel: MainViewModel) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
-    val openChatId by viewModel.currentChatId.collectAsStateWithLifecycle()
     val playerIndex by viewModel.playerMediaIndex.collectAsStateWithLifecycle()
 
     when {
         authState !is AuthState.Ready -> {
             QrLoginScreen(viewModel = viewModel)
         }
-        // Dedicated Player route (v0.7.0). Only reached from ChatScreen
-        // when the user opens a video (NOT a photo). Sits on top of the
-        // chat layer in the route stack.
-        openChatId != null && playerIndex != null -> {
+        playerIndex != null -> {
+            // Dedicated Player route (v0.7.0). Reachable from the
+            // Chats module's media grid for any video card.
             PlayerScreen(viewModel = viewModel)
         }
-        openChatId != null -> {
-            ChatScreen(
-                viewModel = viewModel,
-                chatId = openChatId!!,
-                onBack = { viewModel.closeChat() },
-            )
-        }
         else -> {
-            ChatListScreen(viewModel = viewModel)
+            HomeScreen(viewModel = viewModel)
         }
     }
 }
