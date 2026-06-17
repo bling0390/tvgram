@@ -9,18 +9,80 @@
     <string name="login_waiting">Waiting for confirmation…</string>
     <string name="login_failed">Login failed: %1$s</string>
 
-    <!-- Home -->
-    <string name="tab_channels">Channels</string>
-    <string name="tab_groups">Groups</string>
-    <string name="tab_private">Private</string>
-    <string name="tab_settings">Settings</string>
+    <!-- Nav rail -->
+    <string name="nav_search">Search</string>
+    <string name="nav_chats">Chats</string>
+    <string name="nav_settings">Settings</string>
 
-    <!-- Chat -->
-    <string name="chat_loading">Loading media…</string>
-    <string name="chat_empty">No images or videos in this chat yet</string>
-    <string name="chat_position">%1$d / %2$d</string>
+    <!-- Search screen -->
+    <string name="search_title">Global search</string>
+    <string name="search_placeholder">Search chats…</string>
+    <string name="search_hint">Type to search across all your chats</string>
+    <string name="search_loading">Loading chats…</string>
+    <string name="search_no_match">No chats matching \"%1$s\"</string>
+    <string name="search_stats_matches">%1$d matches · %2$d total</string>
+    <string name="search_type_to_search">Type to search</string>
+    <string name="key_search">SEARCH</string>
+    <string name="key_close">CLOSE</string>
+    <string name="key_backspace">⌫</string>
+    <string name="key_clear">CLR</string>
 
-    <!-- Player -->
-    <string name="player_buffering">Buffering…</string>
-    <string name="player_error">Playback error: %1$s</string>
+    <!-- Chats screen -->
+    <string name="chats_title">Chats</string>
+    <string name="chats_subtitle">%1$d conversations</string>
+    <string name="chats_loading">Loading chats…</string>
+    <string name="chats_empty">No chats yet</string>
+    <string name="chats_select_prompt">←  Select a chat</string>
+    <string name="chats_select_detail">Pick a conversation from the sidebar to see its photos and videos.</string>
+    <string name="chats_media_count">%1$d media items</string>
+    <string name="chats_media_loading">Loading media…</string>
+    <string name="chats_media_empty">No photos or videos in this chat</string>
+
+    <!-- Photo fullscreen viewer -->
+    <string name="photo_loading">Loading image…</string>
+    <string name="photo_position">%1$d / %2$d</string>
+    <string name="photo_key_hint">←  Back  ·  ◀ ▶  Prev / Next</string>
+    <string name="error_prefix">Error: %1$s</string>
+    <string name="download_timed_out">Download timed out</string>
+
+    <!-- Player screen -->
+    <string name="player_loading">Loading video…</string>
+    <string name="player_position">%1$s / %2$s</string>
+    <string name="player_key_hint">←  Back  ·  ◀ ▶  ±10s  ·  OK  Play/Pause  ·  Menu  Speed (%1$.2fx)</string>
+    <string name="player_btn_play">Play</string>
+    <string name="player_btn_pause">Pause</string>
+    <string name="player_btn_seek_back">◀◀ 10s</string>
+    <string name="player_btn_seek_fwd">10s ▶▶</string>
+    <string name="player_btn_speed">Speed</string>
+    <string name="player_btn_prev">« Prev</string>
+    <string name="player_btn_next">Next »</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_account">Account info</string>
+    <string name="settings_account_value_signed_in">Signed in as %1$s</string>
+    <string name="settings_account_value_signed_in_with_id">Signed in as %1$s (id %2$d)</string>
+    <string name="settings_account_value_signed_in_with_phone">Signed in as %1$s (id %2$d, %3$s)</string>
+    <string name="settings_account_value_not_signed_in">Not signed in</string>
+    <string name="settings_account_value_loading">Loading account…</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_about">About Tvgram</string>
+    <string name="settings_about_value">v%1$s</string>
+    <string name="settings_signout">Sign out</string>
+    <string name="settings_signout_value">Sign out of this Telegram account</string>
+    <string name="settings_signout_confirm">Press OK again to confirm</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_language_simplified_chinese">简体中文</string>
+    <string name="settings_language_traditional_chinese">繁體中文</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_system">Follow system</string>
+
+    <!-- About dialog -->
+    <string name="about_title">About Tvgram</string>
+    <string name="about_version">Tvgram v%1$s</string>
+    <string name="about_body">A non-official Telegram client for Android TV, focused on browsing images and videos in your chats.</string>
+    <string name="about_repo">github.com/bling0390/tvgram</string>
+    <string name="about_close_hint">Press OK to close</string>
 </resources>

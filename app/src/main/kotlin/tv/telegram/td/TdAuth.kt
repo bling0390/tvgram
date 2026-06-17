@@ -114,6 +114,29 @@ class TdAuth(
     }
 
     /**
+     * Ask TDLib for the current user. Returns null if TDLib hasn't
+     * returned a `user` yet (e.g. not yet Ready).
+     */
+    suspend fun getMe(timeoutMs: Long = 5_000L): TdUser? {
+        val resp = client.execute(
+            JSONObject().apply { put("@type", "getMe") },
+            timeoutMs = timeoutMs,
+        ) ?: return null
+        if (resp.optString("@type") != "user") return null
+        return TdUser(
+            id          = resp.optLong("id"),
+            firstName   = resp.optString("first_name", ""),
+            lastName    = resp.optString("last_name", ""),
+            username    = resp.optString("usernames", "").let { usernames ->
+                // usernames is an object in TDLib: { @type: "usernames", active_usernames: [...], ... }
+                // For v0.9.0 we just grab a string; full parsing lands in v0.9.1.
+                runCatching { usernames }.getOrNull()?.takeIf { it.isNotBlank() } ?: ""
+            },
+            phoneNumber = resp.optString("phone_number", ""),
+        )
+    }
+
+    /**
      * Ask TDLib for a fresh QR login URL. Use this on app start to
      * transition from WaitTdlibParams / Closed → WaitQrCode.
      */
@@ -137,4 +160,20 @@ class TdAuth(
     companion object {
         private const val TAG = "TdAuth"
     }
+}
+
+/**
+ * TdUser — UI-friendly projection of TDLib's `user` type.
+ * Only the fields Tvgram needs for the Settings account row.
+ */
+data class TdUser(
+    val id: Long,
+    val firstName: String,
+    val lastName: String,
+    val username: String,
+    val phoneNumber: String,
+) {
+    val displayName: String
+        get() = listOf(firstName, lastName).filter { it.isNotBlank() }.joinToString(" ")
+            .ifBlank { username.ifBlank { "Telegram User" } }
 }

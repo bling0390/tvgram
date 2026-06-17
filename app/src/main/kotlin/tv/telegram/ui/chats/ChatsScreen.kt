@@ -47,11 +47,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import tv.telegram.R
 import tv.telegram.td.ChatItem
 import tv.telegram.td.ChatType
 import tv.telegram.td.FileDownloadState
@@ -351,7 +353,7 @@ private fun MediaPane(
         if (idx in items.indices) {
             PhotoFullscreen(
                 item = items[idx],
-                positionText = "${idx + 1} / ${items.size}",
+                positionText = stringResource(R.string.photo_position, idx + 1, items.size),
                 hasPrev = idx > 0,
                 hasNext = idx < items.size - 1,
                 onPrev = { openedIndex = idx - 1 },
@@ -374,11 +376,8 @@ private fun MediaPane(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "${items.size} media items" + when {
-                !loaded -> " (loading\u2026)"
-                items.isEmpty() -> ""
-                else -> ""
-            },
+            text = if (loaded) stringResource(R.string.chats_media_count, items.size)
+                   else stringResource(R.string.chats_media_loading),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 14.sp,
         )
@@ -386,7 +385,8 @@ private fun MediaPane(
         if (items.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    if (loaded) "No photos or videos in this chat" else "Loading media\u2026",
+                    if (loaded) stringResource(R.string.chats_media_empty)
+                    else stringResource(R.string.chats_media_loading),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

@@ -45,6 +45,15 @@ object TdClient {
 
     @Volatile private var started = false
 
+    /**
+     * Reset the started flag so a subsequent [startWithPaths] call is honored.
+     * Used by the real sign-out flow in v0.9.0.
+     */
+    fun markStopped() {
+        started = false
+        process = null
+    }
+
     private val _updates = MutableSharedFlow<JSONObject>(
         replay = 0,
         extraBufferCapacity = 256,
@@ -79,6 +88,23 @@ object TdClient {
             return
         }
         started = true
+
+        // Wipe any leftover TDLib state from a previous account.
+        // v0.9.0: real sign-out deletes the database + files directories
+        // to ensure a fresh account. The TDLib child process re-creates
+        // them on start.
+        runCatching {
+            val dbDir = File(databaseDirectory)
+            if (dbDir.exists()) {
+                val deleted = dbDir.deleteRecursively()
+                Log.i(TAG, "Wiped previous TDLib database: $deleted (path=$databaseDirectory)")
+            }
+            val filesDir = File(filesDirectory)
+            if (filesDir.exists()) {
+                val deleted = filesDir.deleteRecursively()
+                Log.i(TAG, "Wiped previous TDLib files: $deleted (path=$filesDirectory)")
+            }
+        }.onFailure { Log.w(TAG, "Failed to wipe TDLib state", it) }
 
         val soFile = extractNativeLib(context)
         Log.i(TAG, "TDLib native: ${soFile.absolutePath} (${soFile.length()} B)")
@@ -126,6 +152,33 @@ object TdClient {
 
         // Send setTdlibParameters
         sendSetTdlibParameters(apiId, apiHash, databaseDirectory, filesDirectory)
+    }
+
+    /**
+     * Stop the TDLib child process. v0.9.0 real sign-out.
+     * Sends a `close` request first (lets TDLib flush state), then
+     * forcibly destroys the process if it doesn't exit in 2s.
+     */
+    fun stop() {
+        val p = process
+        if (p == null) {
+            Log.w(TAG, "stop() called but no TDLib process running")
+            markStopped()
+            return
+        }
+        Log.i(TAG, "Stopping TDLib process")
+        runCatching {
+            send(JSONObject().apply { put("@type", "close") })
+        }
+        val exited = runCatching { p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS) }.getOrNull() ?: false
+        if (!exited) {
+            Log.w(TAG, "TDLib did not exit after close; destroying forcibly")
+            p.destroyForcibly()
+            p.waitFor(1, java.util.concurrent.TimeUnit.SECONDS)
+        }
+        process = null
+        markStopped()
+        Log.i(TAG, "TDLib stopped")
     }
 
     private fun sendSetTdlibParameters(

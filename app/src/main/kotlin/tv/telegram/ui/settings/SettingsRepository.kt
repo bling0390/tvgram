@@ -2,18 +2,20 @@ package tv.telegram.ui
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 
 /**
- * ThemeMode — currently only Dark. Light is a v0.8.1+ addition (we don't
- * have a Light color scheme designed yet).
+ * ThemeMode — Dark / Light / System.
+ * v0.9.0: System delegates to the OS's day/night setting.
  */
-enum class ThemeMode { Dark }
+enum class ThemeMode { Dark, Light, System }
 
 /**
- * Language — UI display language. v0.8.0 ships only English; this enum
- * exists so we can add more languages without an API break.
+ * Language — UI display language. v0.9.0 ships three locales:
+ * English, Simplified Chinese, Traditional Chinese.
  */
-enum class Language { English }
+enum class Language { English, SimplifiedChinese, TraditionalChinese }
 
 /**
  * SettingsRepository — SharedPreferences-backed storage for user preferences.
@@ -47,4 +49,25 @@ object SettingsRepository {
     fun setLanguage(ctx: Context, lang: Language) {
         prefs(ctx).edit().putString(KEY_LANGUAGE, lang.name).apply()
     }
+
+    /**
+     * Apply [lang] to the running process. Idempotent.
+     * On Android 13+ this triggers a configuration change and the
+     * resources are re-resolved from the matching values-* folder.
+     * On older versions AppCompatDelegate keeps the locale for new
+     * resources and an Activity recreate is required; the caller
+     * (SettingsScreen) is responsible for the recreate.
+     */
+    fun applyLocale(ctx: Context, lang: Language) {
+        val tag = lang.toBcp47()
+        val list = LocaleListCompat.forLanguageTags(tag)
+        AppCompatDelegate.setApplicationLocales(list)
+    }
+}
+
+/** Convert a Language enum value to a BCP-47 language tag. */
+fun Language.toBcp47(): String = when (this) {
+    Language.English -> "en"
+    Language.SimplifiedChinese -> "zh-Hans"
+    Language.TraditionalChinese -> "zh-Hant"
 }

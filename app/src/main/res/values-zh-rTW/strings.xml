@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Telegram TV</string>
+    <string name="app_full_name">Telegram for Android TV</string>
+
+    <string name="login_title">登入 Telegram</string>
+    <string name="login_subtitle">在手機上開啟 Telegram,掃描螢幕上的 QR code</string>
+    <string name="login_waiting">等待確認…</string>
+    <string name="login_failed">登入失敗:%1$s</string>
+
+    <string name="nav_search">搜尋</string>
+    <string name="nav_chats">聊天</string>
+    <string name="nav_settings">設定</string>
+
+    <string name="search_title">全域搜尋</string>
+    <string name="search_placeholder">搜尋聊天…</string>
+    <string name="search_hint">輸入關鍵字,搜尋你的所有聊天</string>
+    <string name="search_loading">正在載入聊天列表…</string>
+    <string name="search_no_match">沒有符合 \"%1$s\" 的聊天</string>
+    <string name="search_stats_matches">%1$d 個符合 · 共 %2$d 個</string>
+    <string name="search_type_to_search">輸入關鍵字搜尋</string>
+    <string name="key_search">搜尋</string>
+    <string name="key_close">關閉</string>
+    <string name="key_backspace">⌫</string>
+    <string name="key_clear">清除</string>
+
+    <string name="chats_title">聊天</string>
+    <string name="chats_subtitle">%1$d 個對話</string>
+    <string name="chats_loading">正在載入聊天列表…</string>
+    <string name="chats_empty">暫無聊天</string>
+    <string name="chats_select_prompt">←  選擇一個聊天</string>
+    <string name="chats_select_detail">在左側列表中選擇一個聊天,查看其中的圖片和影片。</string>
+    <string name="chats_media_count">%1$d 個媒體檔案</string>
+    <string name="chats_media_loading">正在載入媒體…</string>
+    <string name="chats_media_empty">這個聊天裡沒有圖片或影片</string>
+
+    <string name="photo_loading">正在載入圖片…</string>
+    <string name="photo_position">%1$d / %2$d</string>
+    <string name="photo_key_hint">←  返回  ·  ◀ ▶  上一張 / 下一張</string>
+    <string name="error_prefix">錯誤:%1$s</string>
+    <string name="download_timed_out">下載逾時</string>
+
+    <string name="player_loading">正在載入影片…</string>
+    <string name="player_position">%1$s / %2$s</string>
+    <string name="player_key_hint">←  返回  ·  ◀ ▶  ±10 秒  ·  OK  播放/暫停  ·  Menu  倍速 (%1$.2fx)</string>
+    <string name="player_btn_play">播放</string>
+    <string name="player_btn_pause">暫停</string>
+    <string name="player_btn_seek_back">◀◀ 10 秒</string>
+    <string name="player_btn_seek_fwd">10 秒 ▶▶</string>
+    <string name="player_btn_speed">倍速</string>
+    <string name="player_btn_prev">« 上一個</string>
+    <string name="player_btn_next">下一個 »</string>
+
+    <string name="settings_title">設定</string>
+    <string name="settings_account">帳戶資訊</string>
+    <string name="settings_account_value_signed_in">已登入:%1$s</string>
+    <string name="settings_account_value_signed_in_with_id">已登入:%1$s (id %2$d)</string>
+    <string name="settings_account_value_signed_in_with_phone">已登入:%1$s (id %2$d, %3$s)</string>
+    <string name="settings_account_value_not_signed_in">未登入</string>
+    <string name="settings_account_value_loading">正在載入帳戶…</string>
+    <string name="settings_language">語言</string>
+    <string name="settings_theme">主題</string>
+    <string name="settings_about">關於 Tvgram</string>
+    <string name="settings_about_value">v%1$s</string>
+    <string name="settings_signout">登出</string>
+    <string name="settings_signout_value">登出目前的 Telegram 帳戶</string>
+    <string name="settings_signout_confirm">再按一次 OK 確認</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_language_simplified_chinese">简体中文</string>
+    <string name="settings_language_traditional_chinese">繁體中文</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_light">淺色</string>
+    <string name="settings_theme_system">跟隨系統</string>
+
+    <string name="about_title">關於 Tvgram</string>
+    <string name="about_version">Tvgram v%1$s</string>
+    <string name="about_body">Tvgram 是一款非官方的 Telegram Android TV 客戶端,專注於瀏覽聊天中的圖片和影片。</string>
+    <string name="about_repo">github.com/bling0390/tvgram</string>
+    <string name="about_close_hint">按 OK 關閉</string>
+</resources>

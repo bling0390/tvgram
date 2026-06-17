@@ -33,7 +33,9 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import tv.telegram.R
 import tv.telegram.ui.MainViewModel
 import tv.telegram.ui.chats.ChatsScreen
 import tv.telegram.ui.search.SearchScreen
@@ -89,9 +91,9 @@ private fun NavRail(
     onSelect: (MainViewModel.NavSection) -> Unit,
 ) {
     val entries = listOf(
-        NavEntry(MainViewModel.NavSection.Search,   "🔍", "Search"),
-        NavEntry(MainViewModel.NavSection.Chats,    "💬", "Chats"),
-        NavEntry(MainViewModel.NavSection.Settings, "⚙",  "Settings"),
+        NavEntry(MainViewModel.NavSection.Search,   "🔍", stringResource(R.string.nav_search)),
+        NavEntry(MainViewModel.NavSection.Chats,    "💬", stringResource(R.string.nav_chats)),
+        NavEntry(MainViewModel.NavSection.Settings, "⚙",  stringResource(R.string.nav_settings)),
     )
 
     val railFocus = remember { FocusRequester() }

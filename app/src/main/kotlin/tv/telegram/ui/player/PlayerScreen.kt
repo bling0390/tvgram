@@ -39,6 +39,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +52,7 @@ import androidx.media3.ui.compose.state.rememberPlayPauseButtonState
 import androidx.media3.ui.compose.state.rememberPresentationState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import tv.telegram.R
 import tv.telegram.td.FileDownloadState
 import tv.telegram.td.MediaItem
 import tv.telegram.td.MediaType
@@ -252,7 +254,7 @@ fun PlayerScreen(viewModel: MainViewModel) {
         if (currentPath == null || !mediaPrepared) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    "Loading video\u2026",
+                    stringResource(R.string.player_loading),
                     color = Color.White,
                     fontSize = 18.sp,
                 )
@@ -266,7 +268,7 @@ fun PlayerScreen(viewModel: MainViewModel) {
 
         // Subtle top hint (always visible)
         Text(
-            text = "\u2190  Back  \u00B7  \u25C0 \u25B6  \u00B110s  \u00B7  OK  Play/Pause  \u00B7  Menu  Speed (${speed}x)",
+            text = stringResource(R.string.player_key_hint, speed),
             color = Color.White.copy(alpha = 0.45f),
             fontSize = 12.sp,
             modifier = Modifier
@@ -366,7 +368,7 @@ private fun PlayerController(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "${formatMs(pos)} / ${formatMs(dur)}",
+                text = stringResource(R.string.player_position, formatMs(pos), formatMs(dur)),
                 color = Color.White,
                 fontSize = 14.sp,
             )
@@ -390,24 +392,24 @@ private fun PlayerController(
             horizontalArrangement = Arrangement.Center,
         ) {
             if (onPrev != null) {
-                ControllerButton(label = "\u00AB Prev", onClick = onPrev)
+                ControllerButton(label = stringResource(R.string.player_btn_prev), onClick = onPrev)
                 Spacer(Modifier.width(12.dp))
             }
-            ControllerButton(label = "\u25C0\u25C0 10s", onClick = onSeekBack)
+            ControllerButton(label = stringResource(R.string.player_btn_seek_back), onClick = onSeekBack)
             Spacer(Modifier.width(12.dp))
             ControllerButton(
-                label = if (playing) "Pause" else "Play",
+                label = if (playing) stringResource(R.string.player_btn_pause) else stringResource(R.string.player_btn_play),
                 onClick = onPlayPause,
                 emphasis = true,
             )
             Spacer(Modifier.width(12.dp))
-            ControllerButton(label = "10s \u25B6\u25B6", onClick = onSeekFwd)
+            ControllerButton(label = stringResource(R.string.player_btn_seek_fwd), onClick = onSeekFwd)
             if (onNext != null) {
                 Spacer(Modifier.width(12.dp))
-                ControllerButton(label = "Next \u00BB", onClick = onNext)
+                ControllerButton(label = stringResource(R.string.player_btn_next), onClick = onNext)
             }
             Spacer(Modifier.width(12.dp))
-            ControllerButton(label = "Speed", onClick = onSpeedCycle)
+            ControllerButton(label = stringResource(R.string.player_btn_speed), onClick = onSpeedCycle)
         }
     }
 }

@@ -582,3 +582,74 @@ and three sections:
 - ❌ Real sign-out (v0.8.0 calls TdAuth.cancelQrLogin() but does
    not clear the local TDLib database or restart the process)
 - ❌ Sidebar search / type-ahead within the Chats module
+
+---
+
+## D-016 · Account info / real sign-out / theme / i18n · 2026-06-17
+
+**Decision:** v0.9.0-debug ships four cross-cutting changes:
+
+  1. **Real account info** — `TdAuth.getMe()` wraps TDLib's `getMe`
+     call; `MainViewModel._currentUser` exposes the result.
+  2. **Real sign-out** — `realSignOut()` stops the TDLib child process,
+     wipes `filesDir/tdlib` + `filesDir/tdlib-files`, and re-enters
+     QR login. The auth state machine handles routing back to
+     `QrLoginScreen` automatically.
+  3. **Light + Dark theme** — `ThemeMode` is now `Dark | Light | System`;
+     `TvgramTheme` dispatches between two color schemes.
+  4. **i18n (en / 简体中文 / 繁體中文)** — all UI text moved to
+     `res/values/strings.xml` + `res/values-zh-rCN` +
+     `res/values-zh-rTW`. Language picker calls
+     `AppCompatDelegate.setApplicationLocales` with the matching
+     BCP-47 tag (`en`, `zh-Hans`, `zh-Hant`).
+
+**Why:**
+- Account info: v0.8.0's "Account ID: ..." placeholder was a lie.
+  `getMe` is a one-line TDLib call; we just had to wire it.
+- Real sign-out: v0.8.0's `cancelQrLogin()` only flipped the auth state
+  but left the on-disk TDLib database. The next login reused the old
+  session. Wiping `tdlib` + `tdlib-files` and restarting TDLib is the
+  canonical "log out" sequence in TDLib.
+- Light theme: half the user base sits in well-lit rooms. Dark-only
+  was a usability bug, not a brand choice.
+- i18n: the project started English-only because the author writes
+  English comments; v0.9.0 ships three locales because the
+  Chinese-speaking user base is the actual target audience. Android's
+  resource system is the standard way to do this; rolling our own
+  `Strings` object would have been more code, less correct, and would
+  miss the system-level locale fallback.
+
+**Trade-offs accepted:**
+- Language picker only switches the runtime locale; it doesn't restart
+  the Activity. Compose `stringResource` resolves fresh strings on
+  the next composition, but the change isn't visible until the user
+  navigates. A full Activity recreate is on the v0.9.1 list.
+- `AppCompatDelegate.setApplicationLocales` requires API 21+ but the
+  per-app language preference is only honored on Android 13+. On
+  older devices the system locale is used as a fallback; that's
+  fine because v0.9.0's "System" theme mode does the same.
+- `getMe` returns the bare user fields TDLib exposes; the
+  `usernames` object is a placeholder in v0.9.0 and gets full
+  parsing in v0.9.1.
+- Light theme is hand-tuned, not derived from Material 3 default.
+  We kept Telegram's brand blue (#5288C1) and flipped surfaces to
+  white/gray so it doesn't look like a third-party re-skin.
+
+**Scope of v0.9.0:**
+- ✅ `TdAuth.getMe()` + `TdUser` data class
+- ✅ `MainViewModel.currentUser` + `refreshMe()` on auth Ready
+- ✅ `TdClient.stop()` + `startWithPaths()` wipes old database
+- ✅ `MainViewModel.realSignOut()` end-to-end
+- ✅ `ThemeMode.{Dark,Light,System}` + `TvgramLightColors`
+- ✅ `Language.{English,SimplifiedChinese,TraditionalChinese}` +
+  SettingsRepository.applyLocale via `AppCompatDelegate`
+- ✅ 3 strings.xml locales (en, zh-rCN, zh-rTW); ~40 strings each
+- ✅ Hardcoded `Text("...")` calls in ChatsScreen, SearchScreen,
+   PlayerScreen, HomeScreen, SettingsScreen replaced with
+   `stringResource(R.string.xxx)`
+
+**Out of scope (deferred to v0.9.1+):**
+- ❌ Light theme polish (iconography, photo viewer chrome)
+- ❌ Full `usernames` parsing
+- ❌ Activity recreate after language change (workaround: navigate)
+- ❌ Auto-detect system locale on first run

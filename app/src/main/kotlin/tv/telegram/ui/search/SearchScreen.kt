@@ -30,11 +30,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import tv.telegram.R
 import tv.telegram.td.ChatItem
 import tv.telegram.ui.MainViewModel
 import kotlinx.coroutines.delay
@@ -96,7 +98,7 @@ fun SearchScreen(viewModel: MainViewModel) {
             modifier = Modifier.fillMaxSize().padding(32.dp),
         ) {
             Text(
-                "Global search",
+                stringResource(R.string.search_title),
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
@@ -110,9 +112,13 @@ fun SearchScreen(viewModel: MainViewModel) {
             )
             Spacer(Modifier.height(12.dp))
             val stats = if (searchQuery.isNotEmpty()) {
-                "${chats.count { it.title.contains(searchQuery, ignoreCase = true) }} matches · ${chats.size} total"
+                stringResource(
+                    R.string.search_stats_matches,
+                    chats.count { it.title.contains(searchQuery, ignoreCase = true) },
+                    chats.size,
+                )
             } else {
-                "Type to search across all your chats"
+                stringResource(R.string.search_hint)
             }
             Text(
                 stats,
@@ -122,16 +128,18 @@ fun SearchScreen(viewModel: MainViewModel) {
             Spacer(Modifier.height(16.dp))
             if (!loaded) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Loading chats\u2026", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.search_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
                 val results = if (searchQuery.isBlank()) emptyList()
                               else chats.filter { it.title.contains(searchQuery, ignoreCase = true) }
                 if (results.isEmpty() && searchQuery.isNotBlank()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No chats matching \"$searchQuery\"",
+                        Text(
+                            stringResource(R.string.search_no_match, searchQuery),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 20.sp)
+                            fontSize = 20.sp,
+                        )
                     }
                 } else {
                     ResultsGrid(
@@ -182,7 +190,7 @@ private fun SearchBar(
             Text("\ud83d\udd0d", fontSize = 24.sp)
             Spacer(Modifier.width(12.dp))
             Text(
-                text = if (query.isEmpty()) "Search chats..." else query + "_",
+                text = if (query.isEmpty()) stringResource(R.string.search_placeholder) else query + "_",
                 color = if (query.isEmpty())
                     MaterialTheme.colorScheme.onSurfaceVariant
                 else
@@ -192,7 +200,7 @@ private fun SearchBar(
                 modifier = Modifier.weight(1f),
             )
             if (searching) {
-                Text("searching\u2026", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                Text("…", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
             }
         }
     }
@@ -271,7 +279,7 @@ private fun DpadKeyboard(
                 modifier = Modifier.fillMaxSize().padding(24.dp),
             ) {
                 Text(
-                    "Type to search",
+                    stringResource(R.string.search_type_to_search),
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -305,10 +313,10 @@ private fun DpadKeyboard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     KeyButton("Z", onClick = { onChar('Z') }, modifier = Modifier.weight(1f))
-                    KeyButton("\u232b", onClick = onBackspace, modifier = Modifier.weight(1f))
-                    KeyButton("CLR", onClick = onClear, modifier = Modifier.weight(1f))
-                    KeyButton("SEARCH", onClick = onSearch, modifier = Modifier.weight(1.2f), accent = true)
-                    KeyButton("CLOSE", onClick = onClose, modifier = Modifier.weight(1f))
+                    KeyButton(stringResource(R.string.key_backspace), onClick = onBackspace, modifier = Modifier.weight(1f))
+                    KeyButton(stringResource(R.string.key_clear), onClick = onClear, modifier = Modifier.weight(1f))
+                    KeyButton(stringResource(R.string.key_search), onClick = onSearch, modifier = Modifier.weight(1.2f), accent = true)
+                    KeyButton(stringResource(R.string.key_close), onClick = onClose, modifier = Modifier.weight(1f))
                 }
             }
         }

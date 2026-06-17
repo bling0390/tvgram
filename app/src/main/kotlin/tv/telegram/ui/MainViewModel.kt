@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import android.util.Log
 import tv.telegram.td.AuthState
 import tv.telegram.td.FileDownloadState
 import tv.telegram.td.MediaItem
@@ -15,6 +16,7 @@ import tv.telegram.td.TdChatRepository
 import tv.telegram.td.TdClient
 import tv.telegram.td.TdFileRepository
 import tv.telegram.td.TdMediaRepository
+import tv.telegram.td.TdUser
 
 /**
  * MainViewModel — top-level ViewModel for MainActivity.
@@ -94,6 +96,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _language = MutableStateFlow(Language.English)
     val language: StateFlow<Language> = _language.asStateFlow()
 
+    // v0.9.0: TDLib getMe result, refreshed on auth Ready
+    private val _currentUser = MutableStateFlow<TdUser?>(null)
+    val currentUser: StateFlow<TdUser?> = _currentUser.asStateFlow()
+
     fun selectNavSection(section: NavSection) {
         _navSection.value = section
     }
@@ -124,7 +130,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         closeChat()
         closePlayer()
         _sidebarSelectedChatId.value = null
+        _currentUser.value = null
         auth.cancelQrLogin()
+    }
+
+    /** v0.9.0 real sign-out: stop the TDLib process, wipe on-disk state,
+     *  restart TDLib, request a fresh QR login. The TdClient.startWithPaths
+     *  call inside this function re-creates the database and files dirs.
+     */
+    fun realSignOut() {
+        closeChat()
+        closePlayer()
+        _sidebarSelectedChatId.value = null
+        _currentUser.value = null
+        TdClient.stop()
+        viewModelScope.launch { auth.requestQrLogin() }
+    }
+
+    /** v0.9.0: fetch the current TG user via TDLib getMe. */
+    fun refreshMe() {
+        viewModelScope.launch {
+            val user = auth.getMe()
+            _currentUser.value = user
+        }
     }
 
     /** Open the dedicated PlayerScreen for the video at [index] in [mediaItems]. */
@@ -186,6 +214,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val (theme, lang) = SettingsRepository.hydrate(getApplication())
         _themeMode.value = theme
         _language.value = lang
+        SettingsRepository.applyLocale(getApplication(), lang)
+        // Whenever auth hits Ready, fetch the current user
+        viewModelScope.launch {
+            auth.state.collect { st ->
+                if (st is AuthState.Ready) refreshMe()
+            }
+        }
     }
 
     fun openChat(chatId: Long) {
