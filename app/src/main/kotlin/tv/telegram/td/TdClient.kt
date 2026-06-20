@@ -261,7 +261,11 @@ object TdClient {
     /**
      * Resolve the on-disk path of libtdjson.so. Since we ship .so in
      * jniLibs/<abi>/, Android extracts it to nativeLibraryDir automatically.
-     * We just need to find it; no manual extract needed (modern Android, 7+).
+     *
+     * Note: on Android 12+ the directory name inside nativeLibraryDir's
+     * parent can be simplified (e.g. `arm64-v8a` → `arm64`), and
+     * nativeLibraryDir may already point at the ABI subdir. We try a
+     * few candidates so we don't break on those devices/AVDs.
      */
     private fun extractNativeLib(context: android.content.Context): File {
         val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull()
@@ -269,10 +273,27 @@ object TdClient {
         val appInfo = context.packageManager.getApplicationInfo(context.packageName, 0)
         val nativeLibDir = appInfo.nativeLibraryDir
             ?: error("Device exposes no nativeLibraryDir")
-        val so = File(nativeLibDir, "libtdjson.so")
-        if (!so.exists()) {
-            error("libtdjson.so not present in nativeLibraryDir=$nativeLibDir (ABI=$abi)")
+        val candidates = LinkedHashSet<File>().apply {
+            // 1) Plain: <nativeLibraryDir>/libtdjson.so
+            add(File(nativeLibDir, "libtdjson.so"))
+            // 2) Scan every ABI subdir under the lib/ root
+            runCatching {
+                val libRoot = File(nativeLibDir).parentFile
+                libRoot?.listFiles { f -> f.isDirectory }?.forEach { abiDir ->
+                    add(File(abiDir, "libtdjson.so"))
+                }
+            }
+            // 3) Last resort: anything named libtdjson.so under lib/
+            runCatching {
+                File(nativeLibDir).listFiles { f -> f.isFile && f.name == "libtdjson.so" }
+                    ?.forEach { add(it) }
+                File(nativeLibDir).parentFile?.walkTopDown()
+                    ?.filter { it.isFile && it.name == "libtdjson.so" }
+                    ?.forEach { add(it) }
+            }
         }
+        val so = candidates.firstOrNull { it.exists() }
+            ?: error("libtdjson.so not present in nativeLibraryDir=$nativeLibDir (ABI=$abi); tried=${candidates.map{it.absolutePath}}")
         if (!so.canExecute()) {
             Log.w(TAG, "libtdjson.so not executable; setting +x")
             so.setExecutable(true, false)
