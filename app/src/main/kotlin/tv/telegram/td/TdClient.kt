@@ -130,9 +130,19 @@ object TdClient {
             return
         }
         if (onResult == null) {
+            // Fire-and-forget: TDLib's result callback is still wired up
+            // internally; for queries like RequestQrCodeAuthentication,
+            // failure surfaces as the same auth state staying in
+            // WaitPhoneNumber (no UpdateAuthorizationState transition),
+            // which we can detect by our pendingQrRequest guard never
+            // clearing. Log here so logcat shows what we asked for.
+            Log.d(TAG, "send(fire-and-forget) ${query.javaClass.simpleName}")
             c.send(query, null)
         } else {
             c.send(query, { obj ->
+                if (obj is TdApi.Error) {
+                    Log.w(TAG, "send() ${query.javaClass.simpleName} → TdApi.Error ${obj.code}: ${obj.message}")
+                }
                 try { onResult(obj) } catch (t: Throwable) {
                     Log.w(TAG, "send() onResult threw", t)
                 }

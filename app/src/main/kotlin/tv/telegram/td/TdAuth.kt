@@ -50,6 +50,21 @@ class TdAuth(
     @Volatile private var pendingQrRequest: Boolean = false
 
     init {
+        // Watchdog: if TDLib doesn't transition to
+        // AuthorizationStateWaitOtherDeviceConfirmation within
+        // [pendingQrTimeoutMs] after we sent RequestQrCodeAuthentication,
+        // assume the request was silently dropped (which happens if the
+        // state wasn't WaitPhoneNumber at the moment of the call). Reset
+        // the guard so the next WaitPhoneNumber update will retry.
+        scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(pendingQrTimeoutMs)
+                if (pendingQrRequest) {
+                    Log.w(TAG, "QR request pending for >${pendingQrTimeoutMs}ms; resetting guard")
+                    pendingQrRequest = false
+                }
+            }
+        }
         scope.launch {
             client.updates.collect { obj -> handleUpdate(obj) }
         }
@@ -187,6 +202,7 @@ class TdAuth(
 
     companion object {
         private const val TAG = "TdAuth"
+        private const val pendingQrTimeoutMs: Long = 30_000L
     }
 }
 
