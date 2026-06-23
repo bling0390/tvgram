@@ -156,7 +156,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             databaseDirectory = java.io.File(app.filesDir, "tdlib").absolutePath,
             filesDirectory = java.io.File(app.filesDir, "tdlib-files").absolutePath,
         )
-        viewModelScope.launch { auth.requestQrLogin() }
+        // QR is now driven by TdAuth.handleAuthState when TDLib reaches
+        // WaitPhoneNumber — no need to fire it eagerly here. The previous
+        // immediate-call path (D-029) raced against TDLib's startup state
+        // machine and the request landed in WaitTdlibParameters where it
+        // was silently dropped.
     }
 
     /** v0.9.0: fetch the current TG user via TDLib getMe. */
@@ -220,8 +224,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _currentChatTitle.value = id?.let { _chatTitles.value[it] }
             }
         }
-        // Boot QR
-        viewModelScope.launch { auth.requestQrLogin() }
+        // (QR is not booted eagerly here — TdAuth.handleAuthState fires
+        //  RequestQrCodeAuthentication when TDLib transitions into
+        //  WaitPhoneNumber, which is the only valid state for the call.)
         // Hydrate settings from SharedPreferences
         val (theme, lang) = SettingsRepository.hydrate(getApplication())
         _themeMode.value = theme
