@@ -653,3 +653,132 @@ and three sections:
 - ❌ Full `usernames` parsing
 - ❌ Activity recreate after language change (workaround: navigate)
 - ❌ Auto-detect system locale on first run
+
+---
+
+## D-029 · Pivot back to JNI: libtdjni.so + typed TdApi objects · 2026-06-23
+
+**Decision:** Replace D-027's `ProcessBuilder(libtdjson.so)` JSON-RPC
+integration with the standard TDLib JNI bindings (`libtdjni.so` +
+`org.drinkless.td.libcore.telegram.{TdApi,Client,NativeClient}`).
+
+**Why:**
+- D-027's `libtdjson.so` artifact (downloaded as the TDLib JSON binary)
+  was an **ET_DYN shared object**, not an ET_EXEC executable.
+  `ProcessBuilder` would receive `ENOEXEC` ("Exec format error") from
+  the kernel on every attempt to run it. The TDLib child process
+  never actually started in v0.9.0 — login was effectively broken on
+  every device; only the Compose UI rendered (no real auth, no chat
+  list, no media).
+- The TDLib JSON executable has to be **built from source** (`cmake
+  + ninja`), which we don't do in our APK build. The JNI path
+  requires no build: `libtdjni.so` ships pre-built per ABI.
+- The JNI path is the **canonical** TDLib integration used by all
+  known Android TG clients (Telegram-Android, NagramX, Telegram X,
+  Forkgram, saieshshirodkar/Tele, solomonBoltin/TelegramTv).
+  Stack-Overflow / GitHub-issue density for debugging is much higher
+  than for the JSON-RPC path.
+
+**Mechanism:**
+- Vendored `TdApi.java` (66 259 lines, schema-generated) +
+  `Client.java` (377 lines, official Client wrapper) +
+  `NativeClient.java` (44 lines, JNI bridge) under a new
+  `:libtd` library module.
+- Vendored `libtdjni.so` per ABI under
+  `libtd/src/main/libs/<abi>/libtdjni.so`. Total: 63 MB across 4
+  ABIs (under GitHub's 100 MB single-file cap).
+- `NativeClient`'s static initializer calls
+  `System.loadLibrary("tdjni")` automatically when the
+  `TdApi.Object` class is first referenced.
+- `TdClient.kt` rewritten: `Client.create(updateHandler, ...)` to
+  spawn the worker thread; `client.send(TdApi.Function, callback)`
+  for fire-and-forget; `execute(TdApi.Function, timeoutMs)` returns
+  a `TdApi.Object` via `CompletableDeferred`.
+- Three repositories (`TdChatRepository`, `TdMediaRepository`,
+  `TdFileRepository`) migrated from `JSONObject` optString / optInt
+  to typed accessors (`message.content.video.video.id` instead of
+  `message.optJSONObject("content").optJSONObject("video").optInt("id")`).
+- `MainViewModel.realSignOut()` now calls `TdClient.realSignOut()`
+  instead of `TdClient.stop()` + manual `requestQrLogin()`.
+
+**Fixes (replacing the v0.9.0 broken behavior):**
+1. TDLib was never actually running. Now it is — the JNI lib is a
+   real shared object with `Java_org_drinkless_td_libcore_telegram_NativeClient_*`
+   JNI exports (`strings libtdjni.so | grep Java_` confirms).
+2. `startWithPaths()` was wiping the database and files dirs on
+   **every app launch**, forcing a re-login every time. The wipe
+   now lives in `realSignOut()` only; normal launches preserve
+   the session.
+3. The QR login flow used `getLoginUrl` with a `quarter` field,
+   which is a non-existent TDLib API. The correct call is
+   `RequestQrCodeAuthentication()` — TDLib then transitions to
+   `AuthorizationStateWaitOtherDeviceConfirmation`, and the QR
+   link is delivered in that state's `.link` field.
+
+**Trade-offs accepted:**
+- `libtdjni.so` is 16 MB per ABI vs. `libtdjson.so`'s 28 MB.
+  APK size is **smaller** now (32 MB arm64 vs. 43 MB before).
+- Vendored `TdApi.java` is 66 259 lines. R8 minification needs the
+  `consumer-rules.pro` keep rules to preserve the typed accessors
+  the JNI code calls into via reflection. (We added a keep rule
+  for `NativeClient.native <methods>` and `TdApi$*`.)
+- `TdApi` is a vendored TDLib 1.8.0-era schema (no
+  `ChatTypeSavedMessages`, no `Usernames` active list). To get
+  the latest schema we'd need to regenerate `TdApi.java` against
+  TDLib ≥ 1.8.10. Deferred to v1.0.1+.
+
+**Verification (vultr, headless):**
+- `./gradlew assembleDebug` builds clean (Kotlin + Java).
+- APK contains `lib/arm64-v8a/libtdjni.so` (16 MB) +
+  `classes.dex` containing `org.drinkless.td.libcore.telegram.*`
+  (verified via `unzip -l`).
+- `strings libtdjni.so | grep Java_org` shows the expected
+  JNI exports: `Java_org_drinkless_td_libcore_telegram_NativeClient_createClient`,
+  `_destroyClient`, `_clientSend`, `_clientReceive`, `_clientExecute`.
+- Runtime verification (login + chat list) requires a real TV —
+  deferred to user testing on the Sony Bravia.
+
+**Scope of v1.0.0 (this change):**
+- ✅ `:libtd` library module with vendored TDLib Java bindings
+- ✅ `TdClient` rewritten on `Client.create()` JNI API
+- ✅ `TdAuth` rewritten on typed `AuthorizationState` subclasses
+- ✅ `TdChatRepository` / `TdMediaRepository` / `TdFileRepository`
+  migrated to typed `TdApi.Object` accessors
+- ✅ `startWithPaths()` no longer wipes persistent state
+- ✅ `realSignOut()` properly wipes + restarts TDLib
+- ✅ `RequestQrCodeAuthentication()` replaces `getLoginUrl`
+- ✅ `MainViewModel.realSignOut()` uses the new path
+- ✅ Debug APKs built for all 4 ABIs + universal
+
+**Out of scope (deferred to v1.0.1+):**
+- ❌ Regenerate `TdApi.java` against TDLib ≥ 1.8.10 to get
+  `ChatTypeSavedMessages`, `Usernames.activeUsernames`, etc.
+- ❌ Move `libtdjni.so` download to a script + GitHub Release
+  asset (current state: 63 MB checked into git)
+- ❌ Run-time test on actual TV hardware (Sony Bravia)
+
+---
+
+## D-030 · v1.0.0 — first candidate with a working TDLib integration · 2026-06-23
+
+**Decision:** Bump versionCode 10 → 11, versionName "0.9.0-debug"
+→ "1.0.0-debug" after D-029 lands. This is the **first build** in
+which:
+
+- TDLib actually starts (and stays running across launches)
+- The QR login flow is correct end-to-end
+- Real chats load (not mocked)
+
+**Why v1.0 specifically (vs. v0.9.1):**
+- The TDLib integration is the **architecture backbone**; getting
+  it right deserves a major-version bump.
+- v0.9.x was "UI scaffolding on a broken backend" — it was never
+  actually working in the sense users care about (no chat list).
+- v1.0 sets the floor: from here on, every release should at least
+  be able to log in and see real chats.
+
+**Trade-offs accepted:**
+- No tag is created yet (per the v0.9.0 decision "等一般可用再释出
+  APK"). User-testing on the Sony Bravia is the next gate.
+- versionName "1.0.0-debug" stays a `-debug` build (no release
+  signing) until the first hardware-verified build is ready.

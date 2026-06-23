@@ -1,7 +1,6 @@
 package tv.telegram.td
 
 import android.util.Log
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -9,9 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
-import org.json.JSONObject
-import java.util.concurrent.ConcurrentHashMap
+import org.drinkless.td.libcore.telegram.TdApi
 
 /**
  * TdMediaRepository — load image/video messages for a chat.
@@ -19,13 +16,15 @@ import java.util.concurrent.ConcurrentHashMap
  * Flow:
  *   1. User picks a chat (chatId) from ChatListScreen
  *   2. We call openAndLoad(chatId), then getChatHistory(chatId, fromMessageId, offset, limit)
- *   3. For each message, check if it has .content.photo / .content.video
+ *   3. For each message, check if it has .content.photo / .content.video / .content.animation
  *   4. If yes, project to MediaItem and append
  *   5. Continue paginating on demand via loadMore()
  *
  * v0.5.0: pagination. Page size = 100 messages. loadMore() fetches the next
  * older page using `from_message_id = <oldest_seen_id>`. Stops when
  * the server returns fewer than `limit` messages, or the response is empty.
+ *
+ * v1.0.0 (D-029): migrated from JSON RPC to typed [TdApi] objects.
  */
 class TdMediaRepository(
     private val client: TdClient = TdClient,
@@ -47,14 +46,8 @@ class TdMediaRepository(
     private val _loadingMore = MutableStateFlow(false)
     val loadingMore: StateFlow<Boolean> = _loadingMore.asStateFlow()
 
-    /**
-     * True once we've paginated and found no more messages.
-     * Lets the UI hide the "load more" affordance.
-     */
     private val _exhausted = MutableStateFlow(false)
     val exhausted: StateFlow<Boolean> = _exhausted.asStateFlow()
-
-    private val pendingGet = ConcurrentHashMap<String, CompletableDeferred<JSONObject>>()
 
     init {
         scope.launch {
@@ -62,34 +55,20 @@ class TdMediaRepository(
         }
     }
 
-    private fun dispatch(obj: JSONObject) {
-        val type = obj.optString("@type")
-        val extra = obj.optString("@extra", "")
-        if (extra.startsWith("__req_")) {
-            val d = pendingGet.remove(extra)
-            if (d != null) { d.complete(obj); return }
-        }
-        // New message in a visible chat → prepend
-        if (type == "updateNewMessage" || type == "updateMessageContent") {
-            scope.launch {
-                val chatId = _currentChatId.value ?: return@launch
-                val msg = obj.optJSONObject("message") ?: return@launch
-                val item = parseMessage(msg, chatId) ?: return@launch
-                if (item.messageId !in _items.value.map { it.messageId }) {
-                    _items.value = listOf(item) + _items.value
-                }
-            }
+    private fun dispatch(obj: TdApi.Object) {
+        when (obj) {
+            is TdApi.UpdateNewMessage -> handleNewMessage(obj.message)
+            // UpdateMessageContent only gives chatId + messageId + newContent
+            // (no full Message). Skipping; UI re-fetches on chat re-open.
+            else -> { /* ignore */ }
         }
     }
 
-    private suspend fun sendAndAwait(query: JSONObject, timeoutMs: Long = 10_000L): JSONObject? {
-        val extra = "__req_${System.nanoTime()}_${query.optString("@type")}"
-        query.put("@extra", extra)
-        val deferred = CompletableDeferred<JSONObject>()
-        pendingGet[extra] = deferred
-        client.send(query)
-        return withTimeoutOrNull(timeoutMs) {
-            try { deferred.await() } catch (_: Throwable) { null }
+    private fun handleNewMessage(message: TdApi.Message) {
+        val chatId = _currentChatId.value ?: return
+        val item = parseMessage(message, chatId) ?: return
+        if (item.messageId !in _items.value.map { it.messageId }) {
+            _items.value = listOf(item) + _items.value
         }
     }
 
@@ -104,47 +83,38 @@ class TdMediaRepository(
         _exhausted.value = false
         _error.value = null
 
-        // openChat — let TDLib know we're now actively viewing it
-        client.send(JSONObject().apply {
-            put("@type", "openChat")
-            put("chat_id", chatId)
-        })
+        // openChat — let TDLib know we're actively viewing it
+        client.send(TdApi.OpenChat(chatId))
 
-        val resp = sendAndAwait(JSONObject().apply {
-            put("@type", "getChatHistory")
-            put("chat_id", chatId)
-            put("from_message_id", 0L)
-            put("offset", 0)
-            put("limit", limit)
-        })
+        val resp = client.execute(
+            TdApi.GetChatHistory(chatId, 0L, 0, limit, false),
+            timeoutMs = 10_000L,
+        )
         if (resp == null) {
             Log.w(TAG, "getChatHistory timed out")
             _error.value = "Loading timed out. Press OK to retry."
             _loaded.value = true
             return
         }
-        if (resp.optString("@type") != "messages") {
-            val errMsg = resp.optString("message").ifEmpty { resp.optString("@type") }
-            Log.w(TAG, "getChatHistory returned ${resp.optString("@type")}: $errMsg")
+        if (resp !is TdApi.Messages) {
+            val errMsg = (resp as? TdApi.Error)?.message ?: resp.javaClass.simpleName
+            Log.w(TAG, "getChatHistory returned ${resp.javaClass.simpleName}: $errMsg")
             _error.value = "Error: $errMsg"
             _loaded.value = true
             return
         }
-        val arr = resp.optJSONArray("messages") ?: org.json.JSONArray()
-        val items = (0 until arr.length())
-            .mapNotNull { i -> parseMessage(arr.getJSONObject(i), chatId) }
-        Log.i(TAG, "Loaded ${items.size} media items from ${arr.length()} messages (page 1)")
+        val items = resp.messages
+            .mapNotNull { parseMessage(it, chatId) }
+        Log.i(TAG, "Loaded ${items.size} media items from ${resp.messages.size} messages (page 1)")
         _items.value = items
         _loaded.value = true
-        if (items.isEmpty() || arr.length() < limit) {
-            // Either nothing to load, or the server already gave us everything
+        if (items.isEmpty() || resp.messages.size < limit) {
             _exhausted.value = true
         }
     }
 
     /**
      * Fetch the next page of older messages and append media items.
-     * No-op if already loading, or if the current chat is exhausted.
      */
     suspend fun loadMore(limit: Int = 100) {
         if (_loadingMore.value) {
@@ -165,35 +135,22 @@ class TdMediaRepository(
             Log.w(TAG, "loadMore: no items yet; call openAndLoad first")
             return
         }
-        // Oldest message id = the last one (TDLib returns newest-first).
         val oldestMessageId = current.last().messageId
-
         _loadingMore.value = true
         try {
-            val resp = sendAndAwait(JSONObject().apply {
-                put("@type", "getChatHistory")
-                put("chat_id", chatId)
-                put("from_message_id", oldestMessageId)
-                put("offset", 0)
-                put("limit", limit)
-            })
-            if (resp == null) {
-                Log.w(TAG, "loadMore: getChatHistory timed out")
+            val resp = client.execute(
+                TdApi.GetChatHistory(chatId, oldestMessageId, 0, limit, false),
+            )
+            if (resp !is TdApi.Messages) {
+                Log.w(TAG, "loadMore: unexpected type ${resp?.javaClass?.simpleName}")
                 return
             }
-            if (resp.optString("@type") != "messages") {
-                Log.w(TAG, "loadMore: unexpected type ${resp.optString("@type")}")
-                return
-            }
-            val arr = resp.optJSONArray("messages") ?: org.json.JSONArray()
-            val newItems = (0 until arr.length())
-                .mapNotNull { i -> parseMessage(arr.getJSONObject(i), chatId) }
-            Log.i(TAG, "loadMore: got ${newItems.size} media items from ${arr.length()} messages")
-            // De-dup by messageId
+            val newItems = resp.messages.mapNotNull { parseMessage(it, chatId) }
+            Log.i(TAG, "loadMore: got ${newItems.size} media items from ${resp.messages.size} messages")
             val seen = current.map { it.messageId }.toHashSet()
             val merged = current + newItems.filter { it.messageId !in seen }
             _items.value = merged
-            if (newItems.isEmpty() || arr.length() < limit) {
+            if (newItems.isEmpty() || resp.messages.size < limit) {
                 _exhausted.value = true
             }
         } finally {
@@ -203,68 +160,57 @@ class TdMediaRepository(
 
     fun close() {
         val chatId = _currentChatId.value ?: return
-        client.send(JSONObject().apply {
-            put("@type", "closeChat")
-            put("chat_id", chatId)
-        })
+        client.send(TdApi.CloseChat(chatId))
         _currentChatId.value = null
         _items.value = emptyList()
         _loaded.value = false
         _error.value = null
     }
 
-    private fun parseMessage(message: JSONObject, chatId: Long): MediaItem? {
-        val id = message.optLong("id")
-        val date = message.optInt("date", 0)
-        val content = message.optJSONObject("content") ?: return null
-        val type = content.optString("@type")
-        val caption = content.optJSONObject("caption")?.optString("text")
-        return when (type) {
-            "messagePhoto" -> {
-                val photo = content.optJSONObject("photo") ?: return null
-                val largest = pickLargest(photo.optJSONArray("sizes")) ?: return null
-                val photoObj = largest.optJSONObject("photo") ?: return null
+    private fun parseMessage(message: TdApi.Message, chatId: Long): MediaItem? {
+        return when (val c = message.content) {
+            is TdApi.MessagePhoto -> {
+                val photo = c.photo
+                val largest = pickLargest(photo.sizes) ?: return null
                 MediaItem(
-                    messageId = id,
+                    messageId = message.id,
                     type = MediaType.Photo,
-                    fileId = photoObj.optInt("id"),
-                    thumbnailFileId = pickThumbnail(photo.optJSONArray("sizes"))?.optJSONObject("photo")?.optInt("id"),
-                    width = largest.optInt("width", 0),
-                    height = largest.optInt("height", 0),
-                    caption = caption,
-                    date = date,
+                    fileId = largest.photo.id,
+                    thumbnailFileId = pickSmallestPhoto(photo.sizes)?.photo?.id,
+                    width = largest.width,
+                    height = largest.height,
+                    caption = c.caption.text,
+                    date = message.date,
                     chatId = chatId,
                 )
             }
-            "messageVideo" -> {
-                val video = content.optJSONObject("video") ?: return null
-                val thumb = video.optJSONObject("thumbnail")?.optJSONObject("file")
-                val videoFile = video.optJSONObject("video") ?: return null
+            is TdApi.MessageVideo -> {
+                val video = c.video
+                val thumbFile = video.thumbnail?.file
                 MediaItem(
-                    messageId = id,
+                    messageId = message.id,
                     type = MediaType.Video,
-                    fileId = videoFile.optInt("id"),
-                    thumbnailFileId = thumb?.optInt("id"),
-                    width = video.optInt("width", 0),
-                    height = video.optInt("height", 0),
-                    caption = caption,
-                    date = date,
+                    fileId = video.video.id,
+                    thumbnailFileId = thumbFile?.id,
+                    width = video.width,
+                    height = video.height,
+                    caption = c.caption.text,
+                    date = message.date,
                     chatId = chatId,
                 )
             }
-            "messageAnimation" -> {
-                val anim = content.optJSONObject("animation") ?: return null
-                val animFile = anim.optJSONObject("animation") ?: return null
-                val thumb = anim.optJSONObject("thumbnail")?.optJSONObject("file")
+            is TdApi.MessageAnimation -> {
+                val anim = c.animation
+                val thumbFile = anim.thumbnail?.file
                 MediaItem(
-                    messageId = id,
+                    messageId = message.id,
                     type = MediaType.Animation,
-                    fileId = animFile.optInt("id"),
-                    thumbnailFileId = thumb?.optInt("id"),
-                    width = anim.optInt("width", 0),
-                    height = anim.optInt("height", 0),
-                    caption = caption,
-                    date = date,
+                    fileId = anim.animation.id,
+                    thumbnailFileId = thumbFile?.id,
+                    width = anim.width,
+                    height = anim.height,
+                    caption = c.caption.text,
+                    date = message.date,
                     chatId = chatId,
                 )
             }
@@ -272,35 +218,12 @@ class TdMediaRepository(
         }
     }
 
-    private fun pickLargest(sizes: org.json.JSONArray?): JSONObject? {
-        if (sizes == null) return null
-        var best: JSONObject? = null
-        var bestArea = -1
-        for (i in 0 until sizes.length()) {
-            val s = sizes.getJSONObject(i)
-            val w = s.optInt("width", 0)
-            val h = s.optInt("height", 0)
-            val area = w * h
-            if (area > bestArea) { best = s; bestArea = area }
-        }
-        return best
-    }
+    private fun pickLargest(sizes: Array<TdApi.PhotoSize>): TdApi.PhotoSize? =
+        sizes.maxByOrNull { it.width * it.height }
 
-    private fun pickThumbnail(sizes: org.json.JSONArray?): JSONObject? {
-        if (sizes == null) return null
-        // Smallest photo size with a .photo.file
-        var best: JSONObject? = null
-        var bestArea = Int.MAX_VALUE
-        for (i in 0 until sizes.length()) {
-            val s = sizes.getJSONObject(i)
-            if (s.optJSONObject("photo") == null) continue
-            val w = s.optInt("width", 0)
-            val h = s.optInt("height", 0)
-            val area = w * h
-            if (area > 0 && area < bestArea) { best = s; bestArea = area }
-        }
-        return best
-    }
+    private fun pickSmallestPhoto(sizes: Array<TdApi.PhotoSize>): TdApi.PhotoSize? =
+        sizes.filter { it.photo.id != 0 }
+            .minByOrNull { it.width * it.height }
 
     companion object {
         private const val TAG = "TdMediaRepo"

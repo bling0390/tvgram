@@ -1,0 +1,8 @@
+<!--
+  ~ Vendored TDLib JNI bindings. Boost Software License 1.0.
+  ~ See https://github.com/tdlib/td/blob/master/LICENSE_1_0.txt
+  -->
+
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>

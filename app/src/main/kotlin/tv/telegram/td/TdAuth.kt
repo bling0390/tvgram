@@ -8,24 +8,25 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.json.JSONObject
+import org.drinkless.td.libcore.telegram.TdApi
 
 /**
  * TdAuth — listens to TDLib updates and maintains a StateFlow<AuthState>
  * for the UI to collect.
  *
  * TDLib is the source of truth. We translate:
- *   updateAuthorizationState   → AuthState transitions
- *   updateOption (auth)        → same
+ *   UpdateAuthorizationState   → AuthState transitions
+ *
  * And we send:
- *   checkAuthenticationEmailCode
- *   checkAuthenticationCode
- *   getLoginUrl                → triggers WaitQrCode
- *   confirmQrCodeAuthentication
- *   registerUser, etc.
+ *   RequestQrCodeAuthentication     → triggers WaitOtherDeviceConfirmation
+ *   LogOut                          → cancels a pending QR login
  *
  * For MVP we only need the QR-login half. Phone/code/registration flows
  * are NOT implemented (D-003 — QR-only login).
+ *
+ * v1.0.0 (D-029): switched from JSON RPC (`getLoginUrl` + custom qrCode
+ * payload) to the correct TDLib API: `RequestQrCodeAuthentication()`.
+ * The QR link comes back in `AuthorizationStateWaitOtherDeviceConfirmation.link`.
  */
 class TdAuth(
     private val client: TdClient = TdClient,
@@ -35,81 +36,63 @@ class TdAuth(
     private val _state = MutableStateFlow<AuthState>(AuthState.Idle)
     val state: StateFlow<AuthState> = _state.asStateFlow()
 
-    private var lastQrLink: String? = null
-    private var hasHandledReady = false
-
     init {
         scope.launch {
             client.updates.collect { obj -> handleUpdate(obj) }
         }
     }
 
-    private fun handleUpdate(obj: JSONObject) {
-        val type = obj.optString("@type")
-        when (type) {
-            "updateAuthorizationState" -> handleAuthState(obj.optJSONObject("authorization_state"))
-            "updateOption"              -> { /* could re-emit; not needed for MVP */ }
-            else -> { /* ignore everything else */ }
+    private fun handleUpdate(obj: TdApi.Object) {
+        when (obj) {
+            is TdApi.UpdateAuthorizationState -> handleAuthState(obj.authorizationState)
+            else -> { /* ignore other updates */ }
         }
     }
 
-    private fun handleAuthState(authState: JSONObject?) {
-        if (authState == null) return
-        val type = authState.optString("@type")
-        Log.i(TAG, "updateAuthorizationState → $type")
+    private fun handleAuthState(authState: TdApi.AuthorizationState) {
+        val typeName = authState.javaClass.simpleName
+        Log.i(TAG, "updateAuthorizationState → $typeName")
 
-        when (type) {
-            "authorizationStateWaitTdlibParameters" -> {
+        when (authState) {
+            is TdApi.AuthorizationStateWaitTdlibParameters -> {
                 _state.value = AuthState.WaitTdlibParams
             }
-            "authorizationStateWaitEncryptionKey" -> {
+            is TdApi.AuthorizationStateWaitEncryptionKey -> {
                 _state.value = AuthState.WaitEncryptionKey
                 // For MVP we don't set an encryption key. TDLib will use
                 // the default (no encryption). If user has a previously
                 // encrypted db this will fail and we surface it via Error.
-                // Simpler: send checkDatabaseEncryptionKey with empty string.
-                client.send(JSONObject().apply {
-                    put("@type", "checkDatabaseEncryptionKey")
-                    put("encryption_key", "")
-                })
+                client.send(TdApi.CheckDatabaseEncryptionKey(ByteArray(0)))
             }
-            "authorizationStateWaitOtherDeviceConfirmation" -> {
-                val link = authState.optString("link")
+            is TdApi.AuthorizationStateWaitOtherDeviceConfirmation -> {
+                val link = authState.link
                 if (link.isNotEmpty()) {
-                    lastQrLink = link
                     _state.value = AuthState.WaitQrCode(link, alreadyLoggedIn = false)
                 } else {
                     _state.value = AuthState.Error("QR login: empty link from TDLib")
                 }
             }
-            "authorizationStateLoggingOut" -> {
+            is TdApi.AuthorizationStateLoggingOut,
+            is TdApi.AuthorizationStateClosing,
+            is TdApi.AuthorizationStateClosed -> {
                 _state.value = AuthState.Closed
             }
-            "authorizationStateClosing" -> {
-                _state.value = AuthState.Closed
-            }
-            "authorizationStateClosed" -> {
-                _state.value = AuthState.Closed
-            }
-            "authorizationStateReady" -> {
-                hasHandledReady = true
+            is TdApi.AuthorizationStateReady -> {
                 _state.value = AuthState.Ready
                 Log.i(TAG, "✅ Authorization complete — Ready")
             }
-            // Other states (phone/code/registration) — we don't support
-            // them, but log loudly so we know if TDLib is forcing the
-            // phone flow (e.g. a previous phone login session).
-            "authorizationStateWaitPhoneNumber" ->
+            // Phone/code/registration flows we don't support — surface as
+            // Error so the UI can show a meaningful message. (We expect to
+            // never see these in our QR-only flow, but log loudly if TDLib
+            // ever forces them, e.g. for a previously phone-logged-in db.)
+            is TdApi.AuthorizationStateWaitPhoneNumber ->
                 _state.value = AuthState.Error("Phone-number login is not supported. Restart the app to use QR login.")
-            "authorizationStateWaitCode" ->
+            is TdApi.AuthorizationStateWaitCode ->
                 _state.value = AuthState.Error("Code login is not supported.")
-            "authorizationStateWaitRegistration" ->
+            is TdApi.AuthorizationStateWaitRegistration ->
                 _state.value = AuthState.Error("Registration is not supported.")
-            "authorizationStateWaitPassword" ->
+            is TdApi.AuthorizationStateWaitPassword ->
                 _state.value = AuthState.Error("2FA password is not supported in this build.")
-            else -> {
-                Log.w(TAG, "Unhandled authorization state: $type")
-            }
         }
     }
 
@@ -118,43 +101,37 @@ class TdAuth(
      * returned a `user` yet (e.g. not yet Ready).
      */
     suspend fun getMe(timeoutMs: Long = 5_000L): TdUser? {
-        val resp = client.execute(
-            JSONObject().apply { put("@type", "getMe") },
-            timeoutMs = timeoutMs,
-        ) ?: return null
-        if (resp.optString("@type") != "user") return null
+        val resp = client.execute(TdApi.GetMe(), timeoutMs) ?: return null
+        if (resp !is TdApi.User) return null
         return TdUser(
-            id          = resp.optLong("id"),
-            firstName   = resp.optString("first_name", ""),
-            lastName    = resp.optString("last_name", ""),
-            username    = resp.optString("usernames", "").let { usernames ->
-                // usernames is an object in TDLib: { @type: "usernames", active_usernames: [...], ... }
-                // For v0.9.0 we just grab a string; full parsing lands in v0.9.1.
-                runCatching { usernames }.getOrNull()?.takeIf { it.isNotBlank() } ?: ""
-            },
-            phoneNumber = resp.optString("phone_number", ""),
+            id          = resp.id,
+            firstName   = resp.firstName,
+            lastName    = resp.lastName,
+            username    = resp.username ?: "",
+            phoneNumber = resp.phoneNumber ?: "",
         )
     }
 
     /**
-     * Ask TDLib for a fresh QR login URL. Use this on app start to
-     * transition from WaitTdlibParams / Closed → WaitQrCode.
+     * Request QR-code authentication. TDLib will transition to
+     * `AuthorizationStateWaitOtherDeviceConfirmation` and emit a `link`
+     * for the QR code.
+     *
+     * Works only when the current authorization state is
+     * `WaitPhoneNumber`, or if there is no pending authentication query
+     * and the state is `WaitCode`, `WaitRegistration`, or `WaitPassword`.
+     * For our QR-only flow, we always start from `WaitPhoneNumber` (which
+     * is the default state on a fresh database).
      */
     fun requestQrLogin() {
-        client.send(JSONObject().apply {
-            put("@type", "getLoginUrl")
-            put("quarter", JSONObject().apply { put("@type", "qrCode") })
-            put("bot_id", 0)  // 0 = non-bot login
-        })
+        client.send(TdApi.RequestQrCodeAuthentication())
     }
 
     /**
      * Cancel a pending QR login. TDLib will transition to a closed state.
      */
     fun cancelQrLogin() {
-        client.send(JSONObject().apply {
-            put("@type", "logOut")
-        })
+        client.send(TdApi.LogOut())
     }
 
     companion object {

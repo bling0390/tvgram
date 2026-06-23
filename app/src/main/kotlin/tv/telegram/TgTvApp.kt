@@ -8,8 +8,11 @@ import tv.telegram.td.TdClient
 /**
  * Application class.
  *
- * Bootstraps TDLib on startup (D-002, D-027). Single-user; login state
- * persists in filesDir/tdlib (D-019).
+ * Bootstraps TDLib on startup (D-002, D-029). Single-user; login state
+ * persists in filesDir/tdlib and filesDir/tdlib-files. On normal app
+ * launches the database is NOT wiped — only [MainViewModel.realSignOut]
+ * (via [TdClient.realSignOut]) deletes it (D-029 replaces the v0.9.0
+ * behavior where every launch wiped state and forced a re-login).
  */
 class TgTvApp : Application() {
 

@@ -24,8 +24,8 @@ android {
         applicationId = "tv.telegram"
         minSdk        = 21
         targetSdk     = 34
-        versionCode   = 10
-        versionName   = "0.9.0"
+        versionCode   = 11
+        versionName   = "1.0.0"
 
         // Telegram API credentials come from local.properties (gitignored)
         val localProps = Properties().apply {
@@ -143,10 +143,10 @@ dependencies {
     // Coil for image loading
     implementation(libs.coil.compose)
 
-    // TDLib (D-002, D-026, D-027) — JSON interface via native lib
-    //   Native .so is bundled under app/src/main/jniLibs/<abi>/libtdjson.so
-    //   No Maven dependency; we use JSON RPC over stdin/stdout instead.
-    // implementation(libs.tdlib)
+    // TDLib (D-002, D-026, D-027, D-029) — JNI bindings via libtd module
+    //   libtdjni.so + TdApi.java vendored under :libtd
+    //   Loaded at runtime by Client.create() via System.loadLibrary("tdjni")
+    implementation(project(":libtd"))
 
     // QR rendering (D-003)
     implementation(libs.zxing.core)

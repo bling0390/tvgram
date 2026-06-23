@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import android.util.Log
+import tv.telegram.BuildConfig
+import tv.telegram.TgTvApp
 import tv.telegram.td.AuthState
 import tv.telegram.td.FileDownloadState
 import tv.telegram.td.MediaItem
@@ -134,16 +136,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         auth.cancelQrLogin()
     }
 
-    /** v0.9.0 real sign-out: stop the TDLib process, wipe on-disk state,
-     *  restart TDLib, request a fresh QR login. The TdClient.startWithPaths
-     *  call inside this function re-creates the database and files dirs.
+    /** v1.0.0 real sign-out: stop TDLib, wipe on-disk state, restart fresh,
+     *  request a fresh QR login. [TdClient.realSignOut] handles the wipe
+     *  + restart atomically so the database/files dirs are only deleted
+     *  when the user explicitly signs out — NOT on every app start
+     *  (D-029 replaces v0.9's `startWithPaths` wipe, which used to
+     *  force a re-login on every launch).
      */
     fun realSignOut() {
         closeChat()
         closePlayer()
         _sidebarSelectedChatId.value = null
         _currentUser.value = null
-        TdClient.stop()
+        val app = getApplication<TgTvApp>()
+        TdClient.realSignOut(
+            context = app,
+            apiId = BuildConfig.TG_API_ID,
+            apiHash = BuildConfig.TG_API_HASH,
+            databaseDirectory = java.io.File(app.filesDir, "tdlib").absolutePath,
+            filesDirectory = java.io.File(app.filesDir, "tdlib-files").absolutePath,
+        )
         viewModelScope.launch { auth.requestQrLogin() }
     }
 

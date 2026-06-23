@@ -7,10 +7,13 @@ out/
 *.dex
 *.class
 
-# TDLib native libs — large (28MB × 4 ABIs) and versioned per release;
-# we publish them as GitHub Release assets, not source. See D-027.
-# To rebuild locally, see docs/BUILD.md "Native libraries".
-app/src/main/jniLibs/**/*.so
+# TDLib native libs — vendored under libtd/src/main/libs/<abi>/libtdjni.so.
+# These are checked in to the libtd module so a fresh clone builds without
+# network. See D-029 (JNI integration replaces the v0.9 ProcessBuilder
+# approach, which used a different artifact under app/src/main/jniLibs).
+# Note: libtdjni.so is ~65MB total across 4 ABIs; on the edge of GitHub's
+# 100MB single-file cap. If we ever need to reduce repo size, we can
+# move to a download script + GitHub Release assets (see D-027 history).
 
 # Local config (NEVER commit — contains TG API credentials)
 local.properties

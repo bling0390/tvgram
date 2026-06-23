@@ -1,6 +1,8 @@
 package tv.telegram.td
 
+import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -8,36 +10,34 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.BufferedReader
+import kotlinx.coroutines.withTimeoutOrNull
+import org.drinkless.td.libcore.telegram.Client
+import org.drinkless.td.libcore.telegram.TdApi
 import java.io.File
-import java.io.InputStreamReader
-import java.util.concurrent.atomic.AtomicLong
 
 /**
- * TdClient — drives TDLib via the JSON interface (`libtdjson.so`).
+ * TdClient — drives TDLib via the JNI bindings in libtdjni.so.
  *
- * Architecture (D-027):
- *   - libtdjson.so is the TDLib JSON interface (bundled in jniLibs/<abi>/).
- *   - We extract it from the APK at first run to filesDir (Android can't
- *     dlopen a .so inside a ZIP easily on all devices).
- *   - We spawn the TDLib JSON client as a child process: `libtdjson.so` reads
- *     JSON requests from stdin, writes JSON responses to stdout. We communicate
- *     with it by writing one JSON object per line to stdin, and reading
- *     one JSON object per line from stdout.
- *   - All TDLib events (updates) are JSON objects on stdout, just like responses.
- *     We treat both the same way: parse → re-broadcast via [updates].
+ * Architecture (D-029, replaces D-027):
+ *   - libtdjni.so is the TDLib JNI library (bundled in libtd/ module's
+ *     src/main/libs/<abi>/). [Client.create] loads it via the standard
+ *     JNI mechanism (Android extracts from APK) and spawns a worker
+ *     thread that handles all TDLib I/O.
+ *   - We treat updates (sent via the updateHandler) and direct responses
+ *     (sent via per-query resultHandlers) separately. Updates are
+ *     broadcast on the [updates] SharedFlow; direct responses are routed
+ *     to the calling site via [send]'s [onResult] callback or [execute]'s
+ *     suspend return.
  *
- * Threading:
- *   - The child process runs in its own native thread.
- *   - We have a single background thread that reads stdout and pumps updates
- *     into a SharedFlow for ViewModels to collect on Main.
- *   - All writes to stdin happen on whatever thread calls [send] / [sendAsync]
- *     (TDLib JSON client is single-threaded; concurrent writes are safe because
- *     the OutputStream write is atomic for small payloads, and we serialize via
- *     a synchronized block).
+ * Replacement history:
+ *   - v0.9.0 (D-027): ProcessBuilder(libtdjson.so) — did not work on
+ *     Android because the artifact was ET_DYN (shared object), not ET_EXEC.
+ *   - v1.0.0 (D-029): JNI via libtdjni.so — typed [TdApi.Function] / [TdApi.Object].
+ *
+ * Lifecycle:
+ *   1. [TgTvApp.onCreate] → [startWithPaths] — preserves login state.
+ *   2. [MainViewModel.realSignOut] → [realSignOut] — wipes state + restart.
+ *   3. [Client.close] is called in [stop] to release the native thread.
  */
 object TdClient {
 
@@ -45,39 +45,28 @@ object TdClient {
 
     @Volatile private var started = false
 
-    /**
-     * Reset the started flag so a subsequent [startWithPaths] call is honored.
-     * Used by the real sign-out flow in v0.9.0.
-     */
-    fun markStopped() {
-        started = false
-        process = null
-    }
-
-    private val _updates = MutableSharedFlow<JSONObject>(
+    private val _updates = MutableSharedFlow<TdApi.Object>(
         replay = 0,
         extraBufferCapacity = 256,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val updates: SharedFlow<JSONObject> = _updates.asSharedFlow()
+    val updates: SharedFlow<TdApi.Object> = _updates.asSharedFlow()
 
-    private var process: Process? = null
+    private var client: Client? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val nextQueryId = AtomicLong(1L)
-
-    private lateinit var stdin: java.io.OutputStream
 
     /**
-     * Start the TDLib JSON client. Idempotent.
+     * Start the TDLib client. Idempotent.
      *
      * Steps:
-     *   1. Extract libtdjson.so from the APK into filesDir
-     *   2. Spawn it as a child process
-     *   3. Start the stdout reader
-     *   4. Send setTdlibParameters
+     *   1. Create the TDLib [Client] (loads libtdjni.so, spawns worker thread)
+     *   2. Send setTdlibParameters with the on-disk db / files dirs
+     *
+     * The directories are NOT wiped here — we want login state to persist
+     * across app restarts. [realSignOut] does the wipe.
      */
     fun startWithPaths(
-        context: android.content.Context,
+        context: Context,
         apiId: Int,
         apiHash: String,
         databaseDirectory: String,
@@ -89,215 +78,165 @@ object TdClient {
         }
         started = true
 
-        // Wipe any leftover TDLib state from a previous account.
-        // v0.9.0: real sign-out deletes the database + files directories
-        // to ensure a fresh account. The TDLib child process re-creates
-        // them on start.
+        // Ensure dirs exist (no destructive wipe — see D-029).
+        runCatching {
+            File(databaseDirectory).mkdirs()
+            File(filesDirectory).mkdirs()
+        }.onFailure { Log.w(TAG, "Failed to ensure TDLib dirs", it) }
+
+        // Spawn the TDLib client. Native lib is loaded by Client.<clinit>
+        // via NativeClient's static System.loadLibrary("tdjni").
+        val c = Client.create(
+            { obj -> dispatchUpdate(obj) },   // updateHandler — broadcasts everything
+            { e -> Log.w("TDLib-update", "update handler threw", e) },
+            { e -> Log.w("TDLib-default", "default handler threw", e) },
+        )
+        client = c
+        Log.i(TAG, "TDLib client created; sending setTdlibParameters")
+
+        // Build setTdlibParameters.
+        // Use message_database for chat history so search / pagination works.
+        // Use `this.field = param` to disambiguate from the same-named receiver field.
+        val params = TdApi.TdlibParameters().apply {
+            this.apiId = apiId
+            this.apiHash = apiHash
+            systemLanguageCode = "en"
+            deviceModel = "Tvgram TV"
+            systemVersion = "Android TV"
+            applicationVersion = "0.9.0"
+            this.databaseDirectory = databaseDirectory
+            this.filesDirectory = filesDirectory
+            useFileDatabase = true
+            useChatInfoDatabase = true
+            useMessageDatabase = true
+            useSecretChats = false
+            enableStorageOptimizer = true
+            ignoreFileNames = false
+        }
+        send(TdApi.SetTdlibParameters(params))
+    }
+
+    /**
+     * Send a query with optional direct-response handler.
+     *
+     * @param query    TDLib function call (any TdApi.Function subclass)
+     * @param onResult Optional handler for the direct response. Most callers
+     *                 leave this null and listen on [updates] instead.
+     */
+    fun send(query: TdApi.Function, onResult: ((TdApi.Object) -> Unit)? = null) {
+        val c = client
+        if (c == null) {
+            Log.w(TAG, "send() before start(); dropping ${query.javaClass.simpleName}")
+            return
+        }
+        if (onResult == null) {
+            c.send(query, null)
+        } else {
+            c.send(query, { obj ->
+                try { onResult(obj) } catch (t: Throwable) {
+                    Log.w(TAG, "send() onResult threw", t)
+                }
+            }, { e -> Log.w(TAG, "send() exception", e) })
+        }
+    }
+
+    /**
+     * Suspend until we get a direct response to [query] (or [timeoutMs] elapses).
+     * Used for one-shot lookups (e.g. getMe, getChat).
+     */
+    suspend fun execute(query: TdApi.Function, timeoutMs: Long = 10_000L): TdApi.Object? {
+        val c = client ?: run {
+            Log.w(TAG, "execute() before start(); dropping ${query.javaClass.simpleName}")
+            return null
+        }
+        val deferred = CompletableDeferred<TdApi.Object>()
+        c.send(query, { obj -> deferred.complete(obj) }, { e ->
+            Log.w(TAG, "execute() exception", e)
+            deferred.completeExceptionally(e)
+        })
+        return withTimeoutOrNull(timeoutMs) {
+            try { deferred.await() } catch (_: Throwable) { null }
+        }
+    }
+
+    /**
+     * Stop the TDLib client.
+     *
+     * Sends a `close` query, then calls [Client.close] to release native
+     * resources (it blocks until the worker thread exits). After this
+     * call, the process MUST be re-started via [startWithPaths] (or
+     * [realSignOut] to also wipe state).
+     */
+    fun stop() {
+        val c = client
+        if (c == null) {
+            Log.w(TAG, "stop() called but no TDLib client running")
+            started = false
+            return
+        }
+        Log.i(TAG, "Stopping TDLib client")
+        runCatching { c.send(TdApi.Close(), null) }
+        runCatching { c.close() }
+        client = null
+        started = false
+        Log.i(TAG, "TDLib client stopped")
+    }
+
+    /**
+     * Real sign-out: stop TDLib, wipe persistent state, restart fresh.
+     *
+     * The wipe happens here (NOT in [startWithPaths]) so a normal app
+     * launch preserves the existing login session — see D-029.
+     *
+     * @return true if the existing client was stopped + restarted, false
+     *         if there was no client and we only wiped state.
+     */
+    fun realSignOut(
+        context: Context,
+        apiId: Int,
+        apiHash: String,
+        databaseDirectory: String,
+        filesDirectory: String,
+    ): Boolean {
+        val c = client
+        if (c == null) {
+            Log.w(TAG, "realSignOut() called but no TDLib client; just wiping state")
+            wipeState(databaseDirectory, filesDirectory)
+            return false
+        }
+        Log.i(TAG, "Real sign-out: stop + wipe + restart")
+        stop()
+        wipeState(databaseDirectory, filesDirectory)
+        startWithPaths(context, apiId, apiHash, databaseDirectory, filesDirectory)
+        return true
+    }
+
+    private fun wipeState(databaseDirectory: String, filesDirectory: String) {
         runCatching {
             val dbDir = File(databaseDirectory)
             if (dbDir.exists()) {
                 val deleted = dbDir.deleteRecursively()
-                Log.i(TAG, "Wiped previous TDLib database: $deleted (path=$databaseDirectory)")
+                Log.i(TAG, "Wiped TDLib database: $deleted (path=$databaseDirectory)")
             }
             val filesDir = File(filesDirectory)
             if (filesDir.exists()) {
                 val deleted = filesDir.deleteRecursively()
-                Log.i(TAG, "Wiped previous TDLib files: $deleted (path=$filesDirectory)")
+                Log.i(TAG, "Wiped TDLib files: $deleted (path=$filesDirectory)")
             }
         }.onFailure { Log.w(TAG, "Failed to wipe TDLib state", it) }
-
-        val soFile = extractNativeLib(context)
-        Log.i(TAG, "TDLib native: ${soFile.absolutePath} (${soFile.length()} B)")
-
-        // Make the .so executable
-        soFile.setExecutable(true, false)
-
-        val builder = ProcessBuilder(soFile.absolutePath)
-            .redirectErrorStream(false)
-        val p = builder.start()
-        process = p
-        stdin = p.outputStream
-
-        // stderr reader — log native errors
-        scope.launch {
-            BufferedReader(InputStreamReader(p.errorStream)).useLines { lines ->
-                lines.forEach { line ->
-                    Log.w("TDLib-stderr", line)
-                }
-            }
-        }
-
-        // stdout reader — main event pump
-        scope.launch {
-            try {
-                BufferedReader(InputStreamReader(p.inputStream)).useLines { lines ->
-                    for (line in lines) {
-                        if (line.isBlank()) continue
-                        try {
-                            val obj = JSONObject(line)
-                            val emitted = _updates.tryEmit(obj)
-                            if (!emitted) {
-                                Log.w(TAG, "Update flow buffer overflow, dropped: ${obj.optString("@type")}")
-                            }
-                        } catch (e: Throwable) {
-                            Log.w(TAG, "Failed to parse TDLib line: ${line.take(200)}", e)
-                        }
-                    }
-                }
-            } catch (e: Throwable) {
-                Log.e(TAG, "stdout reader crashed", e)
-            }
-            Log.w(TAG, "TDLib process exited (code=${p.exitValue()})")
-        }
-
-        // Send setTdlibParameters
-        sendSetTdlibParameters(apiId, apiHash, databaseDirectory, filesDirectory)
     }
 
     /**
-     * Stop the TDLib child process. v0.9.0 real sign-out.
-     * Sends a `close` request first (lets TDLib flush state), then
-     * forcibly destroys the process if it doesn't exit in 2s.
+     * Updates arrive here via the updateHandler. Broadcast on the SharedFlow
+     * for ViewModels to collect.
      */
-    fun stop() {
-        val p = process
-        if (p == null) {
-            Log.w(TAG, "stop() called but no TDLib process running")
-            markStopped()
-            return
-        }
-        Log.i(TAG, "Stopping TDLib process")
-        runCatching {
-            send(JSONObject().apply { put("@type", "close") })
-        }
-        val exited = runCatching { p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS) }.getOrNull() ?: false
-        if (!exited) {
-            Log.w(TAG, "TDLib did not exit after close; destroying forcibly")
-            p.destroyForcibly()
-            p.waitFor(1, java.util.concurrent.TimeUnit.SECONDS)
-        }
-        process = null
-        markStopped()
-        Log.i(TAG, "TDLib stopped")
-    }
-
-    private fun sendSetTdlibParameters(
-        apiId: Int, apiHash: String,
-        databaseDirectory: String, filesDirectory: String,
-    ) {
-        val params = JSONObject().apply {
-            put("api_id", apiId)
-            put("api_hash", apiHash)
-            put("database_directory", databaseDirectory)
-            put("files_directory", filesDirectory)
-            put("use_file_database", true)
-            put("use_chat_info_database", true)
-            put("use_message_database", true)
-            put("use_secret_chats", false)
-            put("system_language_code", "en")
-            put("device_model", "Sony Bravia (Android TV)")
-            put("system_version", "Android TV")
-            put("application_version", "0.1.0")
-        }
-        send(JSONObject().apply {
-            put("@type", "setTdlibParameters")
-            put("parameters", params)
-        })
-        Log.i(TAG, "Sent setTdlibParameters; waiting for updateAuthorizationState")
-    }
-
-    /**
-     * Send a fire-and-forget query (e.g. setTdlibParameters, getChats).
-     * Use this when you don't need a direct response — responses come
-     * via the [updates] flow tagged with `@extra` you set.
-     */
-    fun send(query: JSONObject) {
-        if (!started) {
-            Log.w(TAG, "send() before start(); dropping ${query.optString("@type")}")
-            return
-        }
-        val line = query.toString() + "\n"
-        // TDLib JSON client is single-threaded; we serialize writes here.
-        synchronized(this::class) {
-            try {
-                stdin.write(line.toByteArray(Charsets.UTF_8))
-                stdin.flush()
-            } catch (e: Throwable) {
-                Log.e(TAG, "Failed to write to TDLib stdin", e)
-            }
+    private fun dispatchUpdate(obj: TdApi.Object) {
+        val emitted = _updates.tryEmit(obj)
+        if (!emitted) {
+            Log.w(TAG, "Update flow buffer overflow, dropped: ${obj.javaClass.simpleName}")
         }
     }
 
-    /**
-     * Send a request that expects a single direct response. Coroutine-based.
-     * Matches responses by the `@extra` field we set.
-     *
-     * Most ViewModels won't need this — they collect [updates] and dispatch
-     * by `@type`. Use execute() for one-shot lookups like getChat(id).
-     */
-    suspend fun execute(query: JSONObject, timeoutMs: Long = 10_000L): JSONObject? {
-        val extra = "__req_${nextQueryId.getAndIncrement()}__"
-        query.put("@extra", extra)
-
-        // Subscribe before sending
-        val resultDeferred = kotlinx.coroutines.CompletableDeferred<JSONObject>()
-        val job = scope.launch {
-            updates.collect { obj ->
-                if (obj.optString("@extra") == extra) {
-                    resultDeferred.complete(obj)
-                }
-            }
-        }
-        try {
-            send(query)
-            return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
-                resultDeferred.await()
-            }
-        } finally {
-            job.cancel()
-        }
-    }
-
-    /**
-     * Resolve the on-disk path of libtdjson.so. Since we ship .so in
-     * jniLibs/<abi>/, Android extracts it to nativeLibraryDir automatically.
-     *
-     * Note: on Android 12+ the directory name inside nativeLibraryDir's
-     * parent can be simplified (e.g. `arm64-v8a` → `arm64`), and
-     * nativeLibraryDir may already point at the ABI subdir. We try a
-     * few candidates so we don't break on those devices/AVDs.
-     */
-    private fun extractNativeLib(context: android.content.Context): File {
-        val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull()
-            ?: error("Device reports no supported ABIs")
-        val appInfo = context.packageManager.getApplicationInfo(context.packageName, 0)
-        val nativeLibDir = appInfo.nativeLibraryDir
-            ?: error("Device exposes no nativeLibraryDir")
-        val candidates = LinkedHashSet<File>().apply {
-            // 1) Plain: <nativeLibraryDir>/libtdjson.so
-            add(File(nativeLibDir, "libtdjson.so"))
-            // 2) Scan every ABI subdir under the lib/ root
-            runCatching {
-                val libRoot = File(nativeLibDir).parentFile
-                libRoot?.listFiles { f -> f.isDirectory }?.forEach { abiDir ->
-                    add(File(abiDir, "libtdjson.so"))
-                }
-            }
-            // 3) Last resort: anything named libtdjson.so under lib/
-            runCatching {
-                File(nativeLibDir).listFiles { f -> f.isFile && f.name == "libtdjson.so" }
-                    ?.forEach { add(it) }
-                File(nativeLibDir).parentFile?.walkTopDown()
-                    ?.filter { it.isFile && it.name == "libtdjson.so" }
-                    ?.forEach { add(it) }
-            }
-        }
-        val so = candidates.firstOrNull { it.exists() }
-            ?: error("libtdjson.so not present in nativeLibraryDir=$nativeLibDir (ABI=$abi); tried=${candidates.map{it.absolutePath}}")
-        if (!so.canExecute()) {
-            Log.w(TAG, "libtdjson.so not executable; setting +x")
-            so.setExecutable(true, false)
-        }
-        return so
-    }
+    /** Internal: exposes scope for repos that want a SupervisorJob lifecycle. */
+    internal val ioScope: CoroutineScope get() = scope
 }
