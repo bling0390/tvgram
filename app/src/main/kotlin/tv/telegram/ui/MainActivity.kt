@@ -54,6 +54,7 @@ private fun AppRoot(viewModel: MainViewModel) {
     val playerIndex by viewModel.playerMediaIndex.collectAsStateWithLifecycle()
     val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
     val showSignOutBanner by viewModel.showSignOutBanner.collectAsStateWithLifecycle()
+    val signingIn by viewModel.signingIn.collectAsStateWithLifecycle()
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
@@ -84,13 +85,18 @@ private fun AppRoot(viewModel: MainViewModel) {
             }
         }
 
-        // Transient status overlay — pure component, see Message.kt.
-        // Always in composition; AnimatedVisibility inside Message hides it
-        // when [showSignOutBanner] is false, so there's no layout cost
-        // outside the active sign-out window.
+        // Transient status overlays — pure components, see Message.kt.
+        // Both always in composition; AnimatedVisibility inside each hides
+        // them when their own visible flag is false, so no layout cost
+        // outside the active window. sign-out and sign-in are mutually
+        // exclusive in practice, so they never overlap visually.
         Message(
             visible = showSignOutBanner,
             message = stringResource(R.string.signing_out),
+        )
+        Message(
+            visible = signingIn,
+            message = stringResource(R.string.signing_in),
         )
     }
 }

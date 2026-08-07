@@ -138,15 +138,10 @@ private fun QrContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 18.sp,
             )
-            Spacer(Modifier.height(24.dp))
-            Text(
-                text  = if (alreadyLoggedIn)
-                            stringResource(R.string.login_waiting)
-                        else
-                            "Waiting for you to scan…",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 16.sp,
-            )
+            // Per design tweak: no third "waiting" line below the
+            // numbered steps — once the user scans, AppRoot renders the
+            // Message("Signing in…") overlay instead, so the in-screen
+            // hint is redundant.
         }
 
         // Right half: QR. Display the 360×360 bitmap at its native 360dp so

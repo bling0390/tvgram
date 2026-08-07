@@ -66,6 +66,7 @@
     <string name="settings_signout_value">退出当前 Telegram 账户</string>
     <string name="settings_signout_confirm">再按一次 OK 确认</string>
     <string name="signing_out">正在退出登录…</string>
+    <string name="signing_in">正在登录…</string>
     <string name="settings_language_english">English</string>
     <string name="settings_language_simplified_chinese">简体中文</string>
     <string name="settings_language_traditional_chinese">繁體中文</string>

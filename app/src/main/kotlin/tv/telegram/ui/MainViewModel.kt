@@ -69,6 +69,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _showSignOutBanner = MutableStateFlow(false)
     val showSignOutBanner: StateFlow<Boolean> = _showSignOutBanner.asStateFlow()
 
+    // ── Sign-in transition ──────────────────────────────
+    // True while the user has scanned the QR and TDLib is processing
+    // the auth. Used by AppRoot to render the "Signing in…" Message
+    // overlay above QrLoginScreen.
+    //
+    // Set true on the WaitQrCode → non-WaitQrCode transition (user
+    // scanned). Cleared on Ready (after a 500ms delay so the Message
+    // exit tween can play before AppRoot swaps to HomeScreen) or Error
+    // (immediately, so the user sees the inline error message).
+    //
+    // The 500ms delay is longer than the sign-out 350ms because TDLib
+    // commonly jumps WaitQrCode → Ready with no visible intermediate
+    // state, so without the hold the Message would slide in and
+    // immediately slide out without ever being readable.
+    private val _signingIn = MutableStateFlow(false)
+    val signingIn: StateFlow<Boolean> = _signingIn.asStateFlow()
+
     val searchQuery = chatRepo.searchQuery
     val searchSearching = chatRepo.searching
 
@@ -280,6 +297,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     delay(350)
                     _signingOut.value = false
                 }
+            }
+        }
+
+        // Detect the sign-in transition (user scans the QR) and drive
+        // [signingIn] so AppRoot can show the "Signing in…" Message
+        // overlay. The hold on Ready gives the Message's exit tween
+        // (250ms) enough time to play before AppRoot swaps to HomeScreen.
+        viewModelScope.launch {
+            var prev: AuthState? = null
+            auth.state.collect { st ->
+                // WaitQrCode → anything else means the user scanned.
+                if (prev is AuthState.WaitQrCode && st !is AuthState.WaitQrCode) {
+                    _signingIn.value = true
+                }
+                // Login complete → hold the overlay for 500ms then hide.
+                if (st is AuthState.Ready && _signingIn.value) {
+                    viewModelScope.launch {
+                        delay(500)
+                        _signingIn.value = false
+                    }
+                }
+                // Login failed → hide immediately so the inline error is
+                // unobstructed.
+                if (st is AuthState.Error) {
+                    _signingIn.value = false
+                }
+                prev = st
             }
         }
     }
