@@ -62,8 +62,13 @@ fun QrLoginScreen(viewModel: MainViewModel) {
     var lastQrLink by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(authState) {
         val st = authState  // local val — can't smart-cast delegated property
-        if (st is AuthState.WaitQrCode) {
-            lastQrLink = st.link
+        when (st) {
+            is AuthState.WaitQrCode -> lastQrLink = st.link
+            // Clear the cache after sign-out so the next startup
+            // doesn't briefly show the previous session's (now invalid)
+            // QR before the new one renders.
+            AuthState.Closed -> lastQrLink = null
+            else -> Unit
         }
     }
 
@@ -83,49 +88,39 @@ fun QrLoginScreen(viewModel: MainViewModel) {
                 subtitle = "Signing out…",
             )
         } else when (val s = authState) {
-            AuthState.Idle,
-            AuthState.WaitTdlibParams -> StatusMessage(
+            // Final / terminal states: dedicated status messages with
+            // different copy. These ARE allowed to break the QR layout
+            // because the user needs the specific message (error reason,
+            // disconnect instructions, "signed in").
+            is AuthState.Error -> StatusMessage(
                 title = stringResource(R.string.app_name),
-                subtitle = "Connecting to Telegram…",
+                subtitle = stringResource(R.string.login_failed, s.message),
             )
-
-            // LoggingIn: keep showing the QR page using the last cached
-            // link. No spinner in the QR area, no layout swap — only the
-            // AppRoot-level Message("Signing in…") overlay appears. The
-            // user has already scanned; the QR code on screen is now
-            // visually stale but harmless (they're not going to scan it
-            // again).
-            AuthState.LoggingIn -> QrContent(
-                title = stringResource(R.string.login_title),
-                subtitle = stringResource(R.string.login_subtitle),
-                qrLink = lastQrLink ?: "",
-            )
-
-            AuthState.WaitEncryptionKey -> StatusMessage(
+            AuthState.Closed -> StatusMessage(
                 title = stringResource(R.string.app_name),
-                subtitle = "Unlocking local database…",
+                subtitle = "Disconnected from Telegram. Restart the app to sign in again.",
             )
 
+            // Default: QR layout for every transient state. Avoids
+            // layout swaps when TDLib internally re-emits WaitTdlibParams
+            // or WaitEncryptionKey between WaitQrCode and Ready during
+            // QR auth processing (which would otherwise flash the
+            // 'Connecting to Telegram…' or 'Unlocking local database…'
+            // text). The QR area renders the live link when in
+            // WaitQrCode, the cached last link during LoggingIn or other
+            // post-scan transient states, and an empty "[ QR ]"
+            // placeholder during initial startup before WaitQrCode is
+            // reached.
             is AuthState.WaitQrCode -> QrContent(
                 title = stringResource(R.string.login_title),
                 subtitle = stringResource(R.string.login_subtitle),
                 qrLink = s.link,
                 alreadyLoggedIn = s.alreadyLoggedIn,
             )
-
-            AuthState.Ready -> StatusMessage(
-                title = stringResource(R.string.app_name),
-                subtitle = "Signed in. Loading chats…",
-            )
-
-            is AuthState.Error -> StatusMessage(
-                title = stringResource(R.string.app_name),
-                subtitle = stringResource(R.string.login_failed, s.message),
-            )
-
-            AuthState.Closed -> StatusMessage(
-                title = stringResource(R.string.app_name),
-                subtitle = "Disconnected from Telegram. Restart the app to sign in again.",
+            else -> QrContent(
+                title = stringResource(R.string.login_title),
+                subtitle = stringResource(R.string.login_subtitle),
+                qrLink = lastQrLink ?: "",
             )
         }
     }
