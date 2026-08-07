@@ -3,6 +3,7 @@ package tv.telegram.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,6 +58,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // and show a single "Signing out..." message instead.
     private val _signingOut = MutableStateFlow(false)
     val signingOut: StateFlow<Boolean> = _signingOut.asStateFlow()
+
+    // Decoupled from [signingOut] so SettingsScreen's slide-out animation
+    // can finish before AppRoot swaps the screen out. Lifecycle:
+    //   realSignOut()  → both flags = true → banner slides in (300ms)
+    //   auth → WaitQrCode → showSignOutBanner = false → banner slides out (250ms)
+    //   delay(350)   → signingOut = false → AppRoot finally swaps to QrLoginScreen
+    // The 350ms gap covers the 250ms exit tween + 100ms buffer so the
+    // banner is fully gone before SettingsScreen is unmounted.
+    private val _showSignOutBanner = MutableStateFlow(false)
+    val showSignOutBanner: StateFlow<Boolean> = _showSignOutBanner.asStateFlow()
 
     val searchQuery = chatRepo.searchQuery
     val searchSearching = chatRepo.searching
@@ -165,6 +176,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         closePlayer()
         _sidebarSelectedChatId.value = null
         _currentUser.value = null
+        _showSignOutBanner.value = true
         _signingOut.value = true
         val app = getApplication<TgTvApp>()
         TdClient.realSignOut(
@@ -258,9 +270,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         // Clear the signingOut flag once TDLib reaches WaitQrCode (or Error)
         // so QrLoginScreen stops suppressing intermediate states.
+        // We also flip [showSignOutBanner] first so SettingsScreen's
+        // top-banner slide-out animation has time to play before AppRoot
+        // swaps the screen out — see [_showSignOutBanner] for the timing.
         viewModelScope.launch {
             auth.state.collect { st ->
                 if (st is AuthState.WaitQrCode || st is AuthState.Error) {
+                    _showSignOutBanner.value = false
+                    delay(350)
                     _signingOut.value = false
                 }
             }

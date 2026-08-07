@@ -2,6 +2,13 @@
 
 package tv.telegram.ui.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,6 +76,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val user by viewModel.currentUser.collectAsStateWithLifecycle()
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
+    val showSignOutBanner by viewModel.showSignOutBanner.collectAsStateWithLifecycle()
 
     var showAbout by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
@@ -141,12 +149,63 @@ fun SettingsScreen(viewModel: MainViewModel) {
 
         if (showAbout) AboutDialog(onDismiss = { showAbout = false })
 
-        // Top-most layer: translucent mask with spinner + label. Sits above
-        // the settings list so the wipe is unambiguous but the page stays
-        // visible behind it. Alpha 0.6 is dark enough to read white text on
-        // either dark or light theme; light enough to keep the row layout
-        // readable underneath.
-        if (signingOut) SigningOutOverlay()
+        // Top-most layer: full-screen 0.25-alpha dim + a top-anchored
+        // banner with spinner + label. Both fade and slide together,
+        // driven by [showSignOutBanner] (not [signingOut]) so the
+        // slide-out tween has time to finish before AppRoot swaps the
+        // screen out — see MainViewModel._showSignOutBanner for the
+        // timing rationale.
+        AnimatedVisibility(
+            visible = showSignOutBanner,
+            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
+                initialOffsetY = { fullHeight -> -fullHeight },
+            ),
+            exit = fadeOut(animationSpec = tween(250)) + slideOutVertically(
+                animationSpec = tween(250, easing = FastOutSlowInEasing),
+                targetOffsetY = { fullHeight -> -fullHeight },
+            ),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Dim layer
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.25f)),
+                )
+
+                // Top banner — "bottom overlay" template from the Android
+                // TV design guide, but anchored to TopCenter so the banner
+                // has somewhere to slide IN from above (and OUT to, on exit).
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 48.dp, vertical = 32.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xE61E1E1E))
+                        .padding(horizontal = 28.dp, vertical = 18.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(28.dp),
+                            strokeWidth = 3.dp,
+                            trackColor = Color.White.copy(alpha = 0.3f),
+                        )
+                        Text(
+                            text = stringResource(R.string.signing_out),
+                            color = Color.White,
+                            fontSize = 18.sp,
+                        )
+                    }
+                }
+            }
+        }
     }
 
     // Confirmation dialog lives outside the if/else so it can never be
@@ -179,56 +238,13 @@ fun SettingsScreen(viewModel: MainViewModel) {
  * [MainViewModel.signingOut] is true. The actual data wipe and TDLib
  * restart happens inside [MainViewModel.realSignOut] — this just
  * gives the user feedback on the page they just clicked.
+ *
+ * Moved to an inlined AnimatedVisibility block in [SettingsScreen] —
+ * the slide-in / slide-out tween needs to be driven by
+ * [MainViewModel.showSignOutBanner] (not [MainViewModel.signingOut])
+ * so the exit animation completes before AppRoot swaps the screen.
  */
-@Composable
-private fun SigningOutOverlay() {
-    // Bottom-overlay layout per Android TV design guide
-    // (https://developer.android.com/design/ui/tv/guides/styles/layouts):
-    // a discrete sheet anchored to the bottom-center that surfaces a
-    // status indicator without disrupting the user's mental model of the
-    // page they were on. The center-overlay pattern was a poor fit here
-    // — it's intended for urgent info / decision prompts, which a brief
-    // sign-out wipe isn't. The bottom overlay pattern matches what apps
-    // like Spotify/Slack use for transient "saving…" / "syncing…" toasts.
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Full-screen dim layer (alpha 0.25) so the settings list stays
-        // very visible underneath, providing spatial context for the banner.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.25f)),
-        )
 
-        // Bottom sheet — ~90% opaque dark surface so it reads as the
-        // focal element without needing a heavy scrim. Rounded corners +
-        // side margins stop it from feeling like an OS-level overlay.
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 48.dp, vertical = 32.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xE61E1E1E))
-                .padding(horizontal = 28.dp, vertical = 18.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                CircularProgressIndicator(
-                    color = Color.White,
-                    modifier = Modifier.size(28.dp),
-                    strokeWidth = 3.dp,
-                )
-                Text(
-                    text = stringResource(R.string.signing_out),
-                    color = Color.White,
-                    fontSize = 18.sp,
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun accountValue(authState: AuthState, user: TdUser?): String =
