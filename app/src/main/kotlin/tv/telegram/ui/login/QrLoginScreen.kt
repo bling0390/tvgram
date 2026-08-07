@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.common.BitMatrix
 import tv.telegram.R
@@ -193,13 +194,17 @@ private fun StatusMessage(title: String, subtitle: String) {
 /** Encode a string as a 360×360 QR code Bitmap. Null on encode failure. */
 private fun encodeQr(content: String): Bitmap? = try {
     // Generate at 360×360 (the display size, after the 480→360dp shrink)
-    // so the bitmap is 1:1 with the Image's dp size and the QR's built-in
-    // quiet zone stays in the correct physical proportion. Previous version
-    // used 320×320 + a 1.5x display scale, which inflated the quiet zone to
-    // ~27dp of white border on every side; then 480×480 paired with the
-    // 480dp display, which is now 360×360 to match the 75% size shrink.
+    // so the bitmap is 1:1 with the Image's dp size. Quiet zone is
+    // explicitly overridden to 2 modules (zxing default is 4) — packed
+    // tighter visually but BELOW the ISO/IEC 18004 minimum of 4 modules,
+    // so some scanners may reject. The module itself also scales up
+    // (multiple goes from 6 to 7 px since 360 / (45+4) = 7), which
+    // partially compensates for the narrower border.
+    val hints = mapOf<EncodeHintType, Any>(
+        EncodeHintType.MARGIN to 2,
+    )
     val matrix: BitMatrix = MultiFormatWriter().encode(
-        content, BarcodeFormat.QR_CODE, 360, 360
+        content, BarcodeFormat.QR_CODE, 360, 360, hints
     )
     val w = matrix.width
     val h = matrix.height
