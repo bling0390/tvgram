@@ -181,7 +181,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .fillMaxWidth()
+                        .fillMaxWidth(0.5f)
                         .padding(horizontal = 48.dp, vertical = 32.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(Color(0xE61E1E1E))
