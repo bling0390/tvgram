@@ -79,69 +79,72 @@ fun SettingsScreen(viewModel: MainViewModel) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        // While [signingOut] is true we render ONLY the overlay — the
-        // settings list is taken out of composition so the user can't
-        // tap into it during the wipe, and so focus has nothing else to
-        // land on. AppRoot guards this state in MainActivity so the screen
-        // is not yanked to QrLoginScreen until TDLib reaches WaitQrCode.
-        if (signingOut) {
-            SigningOutOverlay()
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_title),
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(24.dp))
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    item {
-                        SettingsRow(
-                            title = stringResource(R.string.settings_account),
-                            value = accountValue(authState, user),
-                            onClick = { /* read-only */ },
-                            fr = firstFocus,
-                        )
-                    }
-                    item {
-                        SettingsRow(
-                            title = stringResource(R.string.settings_language),
-                            value = languageLabel(lang),
-                            onClick = { viewModel.setLanguage(lang.next()) },
-                        )
-                    }
-                    item {
-                        SettingsRow(
-                            title = stringResource(R.string.settings_theme),
-                            value = themeLabel(theme),
-                            onClick = { viewModel.setTheme(theme.next()) },
-                        )
-                    }
-                    item {
-                        SettingsRow(
-                            title = stringResource(R.string.settings_about),
-                            value = stringResource(R.string.settings_about_value, BuildConfig.VERSION_NAME),
-                            onClick = { showAbout = true },
-                        )
-                    }
-                    item {
-                        SettingsRow(
-                            title = stringResource(R.string.settings_signout),
-                            value = stringResource(R.string.settings_signout_value),
-                            onClick = { showLogoutConfirm = true },
-                            danger = true,
-                        )
-                    }
+        // Settings list + about dialog stay rendered during sign-out —
+        // only a translucent mask is layered on top so the user can still
+        // see which page they clicked. AppRoot guards this state in
+        // MainActivity so the screen is not yanked to QrLoginScreen until
+        // TDLib reaches WaitQrCode.
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_title),
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(24.dp))
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_account),
+                        value = accountValue(authState, user),
+                        onClick = { /* read-only */ },
+                        fr = firstFocus,
+                    )
+                }
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_language),
+                        value = languageLabel(lang),
+                        onClick = { viewModel.setLanguage(lang.next()) },
+                    )
+                }
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_theme),
+                        value = themeLabel(theme),
+                        onClick = { viewModel.setTheme(theme.next()) },
+                    )
+                }
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_about),
+                        value = stringResource(R.string.settings_about_value, BuildConfig.VERSION_NAME),
+                        onClick = { showAbout = true },
+                    )
+                }
+                item {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_signout),
+                        value = stringResource(R.string.settings_signout_value),
+                        onClick = { showLogoutConfirm = true },
+                        danger = true,
+                    )
                 }
             }
-
-            if (showAbout) AboutDialog(onDismiss = { showAbout = false })
         }
+
+        if (showAbout) AboutDialog(onDismiss = { showAbout = false })
+
+        // Top-most layer: translucent mask with spinner + label. Sits above
+        // the settings list so the wipe is unambiguous but the page stays
+        // visible behind it. Alpha 0.6 is dark enough to read white text on
+        // either dark or light theme; light enough to keep the row layout
+        // readable underneath.
+        if (signingOut) SigningOutOverlay()
     }
 
     // Confirmation dialog lives outside the if/else so it can never be
@@ -178,7 +181,9 @@ fun SettingsScreen(viewModel: MainViewModel) {
 @Composable
 private fun SigningOutOverlay() {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f)),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -186,14 +191,14 @@ private fun SigningOutOverlay() {
             verticalArrangement = Arrangement.Center,
         ) {
             CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary,
+                color = Color.White,
                 modifier = Modifier.size(48.dp),
                 strokeWidth = 4.dp,
             )
             Spacer(Modifier.height(20.dp))
             Text(
                 text = stringResource(R.string.signing_out),
-                color = MaterialTheme.colorScheme.onBackground,
+                color = Color.White,
                 fontSize = 18.sp,
             )
         }
