@@ -60,7 +60,6 @@
     <!-- Settings screen -->
     <string name="settings_title">Settings</string>
     <string name="settings_account">Account info</string>
-    <string name="settings_account_value_signed_in">Signed in as %1$s</string>
     <string name="settings_account_value_signed_in_with_id">Signed in as %1$s (id %2$d)</string>
     <string name="settings_account_value_signed_in_with_phone">Signed in as %1$s (id %2$d, %3$s)</string>
     <string name="settings_account_value_not_signed_in">Not signed in</string>
@@ -71,7 +70,6 @@
     <string name="settings_about_value">v%1$s</string>
     <string name="settings_signout">Sign out</string>
     <string name="settings_signout_value">Sign out of this Telegram account</string>
-    <string name="settings_signout_confirm">Press OK again to confirm</string>
     <string name="settings_signout_dialog_title">Sign out?</string>
     <string name="settings_signout_dialog_text">This will delete all local data and require scanning a new QR code to sign back in.</string>
     <string name="settings_signout_dialog_cancel">Cancel</string>

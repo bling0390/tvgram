@@ -135,7 +135,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                     viewModel.realSignOut()
                     showLogoutConfirm = false
                 }) {
-                    Text(stringResource(R.string.settings_signout_confirm))
+                    Text(stringResource(R.string.settings_signout_dialog_confirm))
                 }
             },
             dismissButton = {
@@ -257,6 +257,11 @@ private fun AboutDialog(onDismiss: () -> Unit) {
                     color = Color.White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    stringResource(R.string.app_full_name),
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 14.sp,
                 )
                 Text(
                     stringResource(R.string.about_version, BuildConfig.VERSION_NAME),

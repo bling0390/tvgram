@@ -179,27 +179,30 @@ private fun ChatSidebar(
 
     Column(modifier = modifier) {
         Text(
-            if (viewingArchive) "Archived Chats" else "Chats",
+            if (viewingArchive) "Archived Chats" else stringResource(R.string.chats_title),
             color = MaterialTheme.colorScheme.onBackground,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            if (viewingArchive) "${chats.size} archived" else "${chats.size} conversations",
+            if (viewingArchive) "${chats.size} archived"
+                else stringResource(R.string.chats_subtitle, chats.size),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
         )
         Spacer(Modifier.height(12.dp))
         if (!loaded) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Loading chats\u2026", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.chats_loading),
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             return@Column
         }
         if (chats.isEmpty() && !viewingArchive) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No chats yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.chats_empty),
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             return@Column
         }
@@ -373,13 +376,13 @@ private fun EmptyMediaPane(modifier: Modifier = Modifier) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                "\u2190  Select a chat",
+                stringResource(R.string.chats_select_prompt),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 22.sp,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Pick a conversation from the sidebar to see its photos and videos.",
+                stringResource(R.string.chats_select_detail),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 14.sp,
             )
@@ -583,10 +586,11 @@ private fun PhotoFullscreen(
         val ctx = LocalContext.current
         var localPath by remember(item.fileId) { mutableStateOf<String?>(null) }
         var error by remember(item.fileId) { mutableStateOf<String?>(null) }
+        val downloadTimedOut = stringResource(R.string.download_timed_out)
         LaunchedEffect(item.fileId) {
             try {
                 val p = viewModel.fileRepo.ensureLocal(item.fileId, priority = 32, timeoutMs = 90_000L)
-                if (p != null) localPath = p else error = "Download timed out"
+                if (p != null) localPath = p else error = downloadTimedOut
             } catch (e: Throwable) { error = e.message }
         }
         Box(
@@ -594,8 +598,11 @@ private fun PhotoFullscreen(
             contentAlignment = Alignment.Center,
         ) {
             when {
-                error != null -> Text("Error: $error", color = Color.White)
-                localPath == null -> Text("Loading image\u2026", color = Color.White)
+                error != null -> Text(
+                    stringResource(R.string.error_prefix, error ?: ""),
+                    color = Color.White,
+                )
+                localPath == null -> Text(stringResource(R.string.photo_loading), color = Color.White)
                 else -> AsyncImage(
                     model = ImageRequest.Builder(ctx).data(File(localPath!!)).build(),
                     contentDescription = item.caption,
@@ -605,7 +612,7 @@ private fun PhotoFullscreen(
             }
         }
         Text(
-            "\u2190  Back  \u00B7  \u25C0 \u25B6  Prev / Next",
+            stringResource(R.string.photo_key_hint),
             color = Color.White.copy(alpha = 0.7f),
             fontSize = 14.sp,
             modifier = Modifier

@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.common.BitMatrix
+import tv.telegram.R
 import tv.telegram.td.AuthState
 import tv.telegram.ui.MainViewModel
 import androidx.tv.material3.Text
@@ -60,41 +62,41 @@ fun QrLoginScreen(viewModel: MainViewModel) {
         // emits WaitQrCode the flag clears and the QR renders directly.
         if (signingOut && authState !is AuthState.WaitQrCode && authState !is AuthState.Error) {
             StatusMessage(
-                title = "Telegram TV",
+                title = stringResource(R.string.app_name),
                 subtitle = "Signing out…",
             )
         } else when (val s = authState) {
             AuthState.Idle,
             AuthState.WaitTdlibParams,
             AuthState.LoggingIn -> StatusMessage(
-                title = "Telegram TV",
+                title = stringResource(R.string.app_name),
                 subtitle = "Connecting to Telegram…",
             )
 
             AuthState.WaitEncryptionKey -> StatusMessage(
-                title = "Telegram TV",
+                title = stringResource(R.string.app_name),
                 subtitle = "Unlocking local database…",
             )
 
             is AuthState.WaitQrCode -> QrContent(
-                title = "Sign in to Telegram",
-                subtitle = "Open Telegram on your phone, then scan this QR code",
+                title = stringResource(R.string.login_title),
+                subtitle = stringResource(R.string.login_subtitle),
                 qrLink = s.link,
                 alreadyLoggedIn = s.alreadyLoggedIn,
             )
 
             AuthState.Ready -> StatusMessage(
-                title = "Telegram TV",
+                title = stringResource(R.string.app_name),
                 subtitle = "Signed in. Loading chats…",
             )
 
             is AuthState.Error -> StatusMessage(
-                title = "Telegram TV",
-                subtitle = s.message,
+                title = stringResource(R.string.app_name),
+                subtitle = stringResource(R.string.login_failed, s.message),
             )
 
             AuthState.Closed -> StatusMessage(
-                title = "Telegram TV",
+                title = stringResource(R.string.app_name),
                 subtitle = "Disconnected from Telegram. Restart the app to sign in again.",
             )
         }
@@ -138,7 +140,7 @@ private fun QrContent(
             Spacer(Modifier.height(24.dp))
             Text(
                 text  = if (alreadyLoggedIn)
-                            "Scanned — please confirm on your phone"
+                            stringResource(R.string.login_waiting)
                         else
                             "Waiting for you to scan…",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
