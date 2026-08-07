@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -180,27 +182,50 @@ fun SettingsScreen(viewModel: MainViewModel) {
  */
 @Composable
 private fun SigningOutOverlay() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+    // Bottom-overlay layout per Android TV design guide
+    // (https://developer.android.com/design/ui/tv/guides/styles/layouts):
+    // a discrete sheet anchored to the bottom-center that surfaces a
+    // status indicator without disrupting the user's mental model of the
+    // page they were on. The center-overlay pattern was a poor fit here
+    // — it's intended for urgent info / decision prompts, which a brief
+    // sign-out wipe isn't. The bottom overlay pattern matches what apps
+    // like Spotify/Slack use for transient "saving…" / "syncing…" toasts.
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Full-screen dim layer (alpha 0.25) so the settings list stays
+        // very visible underneath, providing spatial context for the banner.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.25f)),
+        )
+
+        // Bottom sheet — ~90% opaque dark surface so it reads as the
+        // focal element without needing a heavy scrim. Rounded corners +
+        // side margins stop it from feeling like an OS-level overlay.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 48.dp, vertical = 32.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xE61E1E1E))
+                .padding(horizontal = 28.dp, vertical = 18.dp),
         ) {
-            CircularProgressIndicator(
-                color = Color.White,
-                modifier = Modifier.size(48.dp),
-                strokeWidth = 4.dp,
-            )
-            Spacer(Modifier.height(20.dp))
-            Text(
-                text = stringResource(R.string.signing_out),
-                color = Color.White,
-                fontSize = 18.sp,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 3.dp,
+                )
+                Text(
+                    text = stringResource(R.string.signing_out),
+                    color = Color.White,
+                    fontSize = 18.sp,
+                )
+            }
         }
     }
 }
