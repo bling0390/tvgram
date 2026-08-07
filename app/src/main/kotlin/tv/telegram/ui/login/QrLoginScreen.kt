@@ -148,19 +148,22 @@ private fun QrContent(
             )
         }
 
-        // Right half: QR. Display the 480×480 bitmap at its native 480dp so
+        // Right half: QR. Display the 360×360 bitmap at its native 360dp so
         // the QR modules + built-in quiet zone keep their 1:1 ratio
         // (no DPI scaling artifacts, no extra 16dp white padding around it).
+        // Sized to 75% of the original 480dp per design tweak — gives the
+        // copy column on the left more breathing room without leaving the
+        // QR too small for reliable phone scanning.
         if (qrBitmap != null) {
             Image(
                 bitmap = qrBitmap.asImageBitmap(),
                 contentDescription = "Telegram login QR code",
-                modifier = Modifier.size(480.dp),
+                modifier = Modifier.size(360.dp),
                 contentScale = ContentScale.Fit,
             )
         } else {
             Box(
-                modifier = Modifier.size(480.dp).background(Color.White),
+                modifier = Modifier.size(360.dp).background(Color.White),
                 contentAlignment = Alignment.Center,
             ) {
                 Text("[ QR ]", color = Color.Black, fontSize = 28.sp)
@@ -187,15 +190,16 @@ private fun StatusMessage(title: String, subtitle: String) {
     }
 }
 
-/** Encode a string as a 320×320 QR code Bitmap. Null on encode failure. */
+/** Encode a string as a 360×360 QR code Bitmap. Null on encode failure. */
 private fun encodeQr(content: String): Bitmap? = try {
-    // Generate at 480×480 (the display size) so the bitmap is 1:1 with
-    // the Image's dp size and the QR's built-in quiet zone stays in the
-    // correct physical proportion. Previous version used 320×320 + a
-    // 1.5x display scale, which inflated the quiet zone to ~27dp of
-    // white border on every side.
+    // Generate at 360×360 (the display size, after the 480→360dp shrink)
+    // so the bitmap is 1:1 with the Image's dp size and the QR's built-in
+    // quiet zone stays in the correct physical proportion. Previous version
+    // used 320×320 + a 1.5x display scale, which inflated the quiet zone to
+    // ~27dp of white border on every side; then 480×480 paired with the
+    // 480dp display, which is now 360×360 to match the 75% size shrink.
     val matrix: BitMatrix = MultiFormatWriter().encode(
-        content, BarcodeFormat.QR_CODE, 480, 480
+        content, BarcodeFormat.QR_CODE, 360, 360
     )
     val w = matrix.width
     val h = matrix.height

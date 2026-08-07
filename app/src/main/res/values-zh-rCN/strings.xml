@@ -3,8 +3,8 @@
     <string name="app_name">Telegram TV</string>
     <string name="app_full_name">Telegram for Android TV</string>
 
-    <string name="login_title">登录 Telegram</string>
-    <string name="login_subtitle">在手机上：设置 → 设备 → 链接桌面设备，然后扫描此二维码</string>
+    <string name="login_title">用手机 Telegram 扫码登录</string>
+    <string name="login_subtitle">1. 在手机上打开 Telegram\n2. 进入 设置 &gt; 设备 &gt; 扫描二维码\n3. 扫描此二维码完成登录</string>
     <string name="login_waiting">等待确认…</string>
     <string name="login_failed">登录失败:%1$s</string>
 
