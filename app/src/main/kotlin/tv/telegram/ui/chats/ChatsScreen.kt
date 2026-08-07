@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -89,6 +90,9 @@ import java.io.File
 @Composable
 fun ChatsScreen(viewModel: MainViewModel) {
     val chats by viewModel.chatList.collectAsStateWithLifecycle()
+    val archiveChats by viewModel.archiveChats.collectAsStateWithLifecycle()
+    val viewingArchive by viewModel.viewingArchive.collectAsStateWithLifecycle()
+    val archiveCount by viewModel.archiveCount.collectAsStateWithLifecycle()
     val loaded by viewModel.chatListLoaded.collectAsStateWithLifecycle()
     val selectedChatId by viewModel.sidebarSelectedChatId.collectAsStateWithLifecycle()
     val mediaItems by viewModel.mediaItems.collectAsStateWithLifecycle()
@@ -98,10 +102,14 @@ fun ChatsScreen(viewModel: MainViewModel) {
     Row(modifier = Modifier.fillMaxSize()) {
         // ── Sidebar ──────────────────────────────────────────────
         ChatSidebar(
-            chats = chats,
+            chats = if (viewingArchive) archiveChats else chats,
             loaded = loaded,
             selectedChatId = selectedChatId,
+            archiveCount = archiveCount,
+            viewingArchive = viewingArchive,
             onSelect = { viewModel.selectSidebarChat(it) },
+            onShowArchive = { viewModel.setViewingArchive(true) },
+            onShowMain = { viewModel.setViewingArchive(false) },
             viewModel = viewModel,
             modifier = Modifier
                 .width(320.dp)
@@ -152,23 +160,33 @@ private fun ChatSidebar(
     chats: List<ChatItem>,
     loaded: Boolean,
     selectedChatId: Long?,
+    archiveCount: Int,
+    viewingArchive: Boolean,
     onSelect: (Long) -> Unit,
+    onShowArchive: () -> Unit,
+    onShowMain: () -> Unit,
     viewModel: MainViewModel,
     modifier: Modifier = Modifier,
 ) {
     val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { firstFocus.requestFocus() }
+    // Re-focus on view toggle so focus follows the new top item
+    // (Back in archive view, Archive entry in main view, first chat if no archive).
+    LaunchedEffect(viewingArchive) {
+        withFrameNanos { }
+        try { firstFocus.requestFocus() }
+        catch (_: IllegalStateException) {}
+    }
 
     Column(modifier = modifier) {
         Text(
-            "Chats",
+            if (viewingArchive) "Archived Chats" else "Chats",
             color = MaterialTheme.colorScheme.onBackground,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            "${chats.size} conversations",
+            if (viewingArchive) "${chats.size} archived" else "${chats.size} conversations",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
         )
@@ -179,22 +197,72 @@ private fun ChatSidebar(
             }
             return@Column
         }
-        if (chats.isEmpty()) {
+        if (chats.isEmpty() && !viewingArchive) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("No chats yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             return@Column
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (viewingArchive) {
+                item(key = "back-to-main") {
+                    ArchiveEntry(
+                        label = "Back to Chats",
+                        onClick = onShowMain,
+                        fr = firstFocus,
+                    )
+                }
+            } else if (archiveCount > 0) {
+                item(key = "show-archive") {
+                    ArchiveEntry(
+                        label = "Archived Chats ($archiveCount)",
+                        onClick = onShowArchive,
+                        fr = firstFocus,
+                    )
+                }
+            }
             items(chats, key = { it.id }) { chat ->
                 SidebarItem(
                     chat = chat,
                     selected = chat.id == selectedChatId,
                     onClick = { onSelect(chat.id) },
-                    fr = if (chat.id == chats.first().id) firstFocus else null,
+                    // Focus first chat only when there's no Archive/Back entry above it.
+                    fr = if (chat.id == chats.firstOrNull()?.id && viewingArchive.not() && archiveCount == 0) firstFocus else null,
                     viewModel = viewModel,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ArchiveEntry(
+    label: String,
+    onClick: () -> Unit,
+    fr: FocusRequester? = null,
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.colors(
+            containerColor = Color(0xFF2A2A2A),
+            focusedContainerColor = MaterialTheme.colorScheme.secondary,
+        ),
+        scale = CardDefaults.scale(focusedScale = 1.04f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .let { if (fr != null) it.focusRequester(fr) else it },
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                label,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }
@@ -457,7 +525,7 @@ private fun SidebarMediaCard(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        if (item.type == MediaType.Video) "\u25B6  Video" else "\ud83d\uddbc  Photo",
+                        if (item.type == MediaType.Video) "\u25B6  Video" else "Photo",
                         color = Color.White.copy(alpha = 0.7f),
                     )
                 }
@@ -492,7 +560,11 @@ private fun PhotoFullscreen(
 ) {
     BackHandler(enabled = true) { onBack() }
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(item.fileId) { focusRequester.requestFocus() }
+    LaunchedEffect(item.fileId) {
+        withFrameNanos { }
+        try { focusRequester.requestFocus() }
+        catch (_: IllegalStateException) {}
+    }
 
     Box(
         modifier = Modifier

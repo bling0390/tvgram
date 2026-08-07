@@ -20,3 +20,25 @@ sdk.dir=/opt/android-sdk
 # ──────────────────────────────────────────────────────────────────────
 TG_API_ID=28653083
 TG_API_HASH=6e4b99e9f8c7473d8ea1274541279255
+
+# ──────────────────────────────────────────────
+# Outbound proxy for TDLib (REQUIRED in regions where Telegram DCs
+# are blocked — China, Iran, etc.)
+#
+# TDLib does NOT honor Android's HTTP proxy settings. It uses native
+# sockets and only respects proxies configured via TdApi.AddProxy —
+# see TdClient.enableProxy() in app/src/main/kotlin/tv/telegram/td/.
+#
+# From an Android emulator, the host machine (your Mac) is reachable
+# via 10.0.2.2 — use that for PROXY_HOST.
+#
+# IMPORTANT: these settings only apply to DEBUG builds. The release
+# build type overrides them with empty defaults so developer proxy
+# infrastructure never leaks into distributed APKs. See app/build.gradle.kts
+# buildTypes.debug / buildTypes.release.
+# ──────────────────────────────────────────────────────────────────────
+# PROXY_HOST=
+# PROXY_PORT=
+# PROXY_TYPE=socks5    # socks5 (recommended) or http
+# PROXY_USER=
+# PROXY_PASS=

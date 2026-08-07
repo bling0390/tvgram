@@ -41,6 +41,8 @@ import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 
 /**
  * SettingsScreen — v0.9.0 with real account info, real sign-out, light
@@ -115,22 +117,33 @@ fun SettingsScreen(viewModel: MainViewModel) {
             item {
                 SettingsRow(
                     title = stringResource(R.string.settings_signout),
-                    value = stringResource(
-                        if (showLogoutConfirm) R.string.settings_signout_confirm
-                        else R.string.settings_signout_value
-                    ),
-                    onClick = {
-                        if (showLogoutConfirm) {
-                            viewModel.realSignOut()
-                            showLogoutConfirm = false
-                        } else {
-                            showLogoutConfirm = true
-                        }
-                    },
+                    value = stringResource(R.string.settings_signout_value),
+                    onClick = { showLogoutConfirm = true },
                     danger = true,
                 )
             }
         }
+    }
+
+    if (showLogoutConfirm) {
+        AlertDialog(
+            onDismissRequest = { showLogoutConfirm = false },
+            title = { Text(stringResource(R.string.settings_signout_dialog_title)) },
+            text = { Text(stringResource(R.string.settings_signout_dialog_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.realSignOut()
+                    showLogoutConfirm = false
+                }) {
+                    Text(stringResource(R.string.settings_signout_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutConfirm = false }) {
+                    Text(stringResource(R.string.settings_signout_dialog_cancel))
+                }
+            },
+        )
     }
 
     if (showAbout) AboutDialog(onDismiss = { showAbout = false })

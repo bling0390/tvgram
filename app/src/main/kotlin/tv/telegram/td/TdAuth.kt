@@ -68,7 +68,25 @@ class TdAuth(
         scope.launch {
             client.updates.collect { obj -> handleUpdate(obj) }
         }
+
+    // Bootstrap: ask TDLib for the current auth state. TdAuth is
+    // instantiated after TgTvApp.onCreate() calls TdClient.startWithPaths(),
+    // so the initial UpdateAuthorizationState events (WaitTdlibParams →
+    // WaitEncryptionKey) emitted by TDLib happen BEFORE TdAuth subscribes
+    // to client.updates. Since _updates is replay=0, those events are
+    // silently dropped, and TdAuth never receives WaitEncryptionKey →
+    // never sends CheckDatabaseEncryptionKey → TDLib stalls waiting for
+    // the encryption key. Calling GetAuthorizationState asks TDLib to
+    // send the current state via this result handler, which we route
+    // into handleAuthState — same code path as a normal update.
+    client.send(TdApi.GetAuthorizationState()) { result ->
+        if (result is TdApi.AuthorizationState) {
+            handleAuthState(result)
+        } else if (result is TdApi.Error) {
+            Log.w(TAG, "GetAuthorizationState bootstrap failed: ${result.code} ${result.message}")
+        }
     }
+}
 
     private fun handleUpdate(obj: TdApi.Object) {
         when (obj) {
@@ -111,7 +129,7 @@ class TdAuth(
             is TdApi.AuthorizationStateReady -> {
                 pendingQrRequest = false
                 _state.value = AuthState.Ready
-                Log.i(TAG, "✅ Authorization complete — Ready")
+                Log.i(TAG, "Authorization complete — Ready")
             }
             // WaitPhoneNumber is the FIRST state where
             // RequestQrCodeAuthentication becomes valid (per TDLib

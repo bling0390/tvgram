@@ -41,6 +41,18 @@ class TgTvApp : Application() {
             databaseDirectory = tdlibDir.absolutePath,
             filesDirectory    = tdlibFilesDir.absolutePath,
         )
+
+        // Wire up outbound proxy (TDLib ignores Android HTTP proxy).
+        // No-op when PROXY_HOST is blank in local.properties. Required
+        // for users behind a firewall (China, Iran, etc.).
+        // See TdClient.enableProxy docs for the 10.0.2.2 emulator quirk.
+        TdClient.enableProxy(
+            host     = BuildConfig.PROXY_HOST,
+            port     = BuildConfig.PROXY_PORT,
+            type     = BuildConfig.PROXY_TYPE,
+            username = BuildConfig.PROXY_USER,
+            password = BuildConfig.PROXY_PASS,
+        )
     }
 
     companion object {

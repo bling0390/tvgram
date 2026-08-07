@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -21,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +46,7 @@ import androidx.tv.material3.MaterialTheme
 @Composable
 fun QrLoginScreen(viewModel: MainViewModel) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
+    val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -51,7 +54,16 @@ fun QrLoginScreen(viewModel: MainViewModel) {
             .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center,
     ) {
-        when (val s = authState) {
+        // While sign-out is in flight, suppress the intermediate states
+        // (Closed / WaitTdlibParams / WaitEncryptionKey / LoggingIn)
+        // and show a single "Signing out..." message. As soon as TDLib
+        // emits WaitQrCode the flag clears and the QR renders directly.
+        if (signingOut && authState !is AuthState.WaitQrCode && authState !is AuthState.Error) {
+            StatusMessage(
+                title = "Telegram TV",
+                subtitle = "Signing out…",
+            )
+        } else when (val s = authState) {
             AuthState.Idle,
             AuthState.WaitTdlibParams,
             AuthState.LoggingIn -> StatusMessage(
@@ -98,56 +110,60 @@ private fun QrContent(
 ) {
     val qrBitmap = remember(qrLink) { encodeQr(qrLink) }
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier.padding(48.dp),
+    // Side-by-side layout: title/subtitle on the left, QR on the right.
+    // Fills the 16:9 TV screen horizontally so there's no big black void
+    // around the QR (which is what the previous Column layout produced).
+    Row(
+        modifier = Modifier.fillMaxSize().padding(48.dp),
+        horizontalArrangement = Arrangement.spacedBy(48.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text  = title,
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 48.sp,
-            style   = MaterialTheme.typography.displayLarge,
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text  = subtitle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 18.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(640.dp),
-        )
-        Spacer(Modifier.height(36.dp))
+        // Left half: copy
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text  = title,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = 48.sp,
+                style   = MaterialTheme.typography.displayLarge,
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text  = subtitle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 18.sp,
+            )
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text  = if (alreadyLoggedIn)
+                            "Scanned — please confirm on your phone"
+                        else
+                            "Waiting for you to scan…",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 16.sp,
+            )
+        }
 
+        // Right half: QR. Display the 480×480 bitmap at its native 480dp so
+        // the QR modules + built-in quiet zone keep their 1:1 ratio
+        // (no DPI scaling artifacts, no extra 16dp white padding around it).
         if (qrBitmap != null) {
             Image(
                 bitmap = qrBitmap.asImageBitmap(),
                 contentDescription = "Telegram login QR code",
-                modifier = Modifier
-                    .size(320.dp)
-                    .background(Color.White)
-                    .padding(12.dp),
+                modifier = Modifier.size(480.dp),
+                contentScale = ContentScale.Fit,
             )
         } else {
             Box(
-                modifier = Modifier
-                    .size(320.dp)
-                    .background(Color.White),
+                modifier = Modifier.size(480.dp).background(Color.White),
                 contentAlignment = Alignment.Center,
             ) {
                 Text("[ QR ]", color = Color.Black, fontSize = 28.sp)
             }
         }
-
-        Spacer(Modifier.height(24.dp))
-        Text(
-            text  = if (alreadyLoggedIn)
-                        "Scanned — please confirm on your phone"
-                    else
-                        "Waiting for you to scan…",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 16.sp,
-        )
     }
 }
 
@@ -171,8 +187,13 @@ private fun StatusMessage(title: String, subtitle: String) {
 
 /** Encode a string as a 320×320 QR code Bitmap. Null on encode failure. */
 private fun encodeQr(content: String): Bitmap? = try {
+    // Generate at 480×480 (the display size) so the bitmap is 1:1 with
+    // the Image's dp size and the QR's built-in quiet zone stays in the
+    // correct physical proportion. Previous version used 320×320 + a
+    // 1.5x display scale, which inflated the quiet zone to ~27dp of
+    // white border on every side.
     val matrix: BitMatrix = MultiFormatWriter().encode(
-        content, BarcodeFormat.QR_CODE, 320, 320
+        content, BarcodeFormat.QR_CODE, 480, 480
     )
     val w = matrix.width
     val h = matrix.height

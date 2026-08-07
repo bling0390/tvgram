@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -175,7 +176,11 @@ fun PlayerScreen(viewModel: MainViewModel) {
 
     // Focus requester so D-pad events land here first.
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        try { focusRequester.requestFocus() }
+        catch (_: IllegalStateException) {}
+    }
 
     // Controller overlay visibility (auto-hide after 4s of inactivity).
     var showController by remember { mutableStateOf(true) }

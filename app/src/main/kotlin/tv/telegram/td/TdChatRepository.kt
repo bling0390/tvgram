@@ -36,6 +36,23 @@ class TdChatRepository(
 
     private val _allChats = MutableStateFlow<List<ChatItem>>(emptyList())
 
+    // Archive list — populated alongside _allChats. The sidebar shows
+    // "Archived Chats (N)" only when N > 0.
+    private val _archiveChats = MutableStateFlow<List<ChatItem>>(emptyList())
+    val archiveChats: StateFlow<List<ChatItem>> = _archiveChats.asStateFlow()
+
+    private val _archiveCount = MutableStateFlow(0)
+    val archiveCount: StateFlow<Int> = _archiveCount.asStateFlow()
+
+    // Sidebar toggle: false = main chat list, true = archived chat list.
+    // UI flips this when user selects/deselects the Archive entry.
+    private val _viewingArchive = MutableStateFlow(false)
+    val viewingArchive: StateFlow<Boolean> = _viewingArchive.asStateFlow()
+
+    fun setViewingArchive(value: Boolean) {
+        _viewingArchive.value = value
+    }
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -57,12 +74,14 @@ class TdChatRepository(
                 if (obj.authorizationState is TdApi.AuthorizationStateReady) {
                     Log.i(TAG, "Auth Ready → loading chat list")
                     scope.launch { loadAllChats() }
+                    scope.launch { loadArchiveChats() }
                 }
             }
             is TdApi.UpdateNewChat, is TdApi.UpdateChatPosition -> {
                 if (_loaded.value) {
                     Log.i(TAG, "Chat list change (${obj.javaClass.simpleName}) → refreshing")
                     scope.launch { loadAllChats() }
+                    scope.launch { loadArchiveChats() }
                 }
             }
             else -> { /* ignore */ }
@@ -104,6 +123,36 @@ class TdChatRepository(
             applyFilter(_searchQuery.value)
         } else {
             _items.value = items
+        }
+    }
+
+    /**
+     * Load the archived chat list (TDLib [TdApi.ChatListArchive]). Mirrors
+     * [loadAllChats] but reads from the archive list. Used by the ChatsScreen
+     * sidebar's "Archived Chats (N)" entry.
+     *
+     * Idempotent — refreshes on every UpdateChatPosition / UpdateNewChat after
+     * initial load. Silently no-ops if TDLib returns nothing (archive empty).
+     */
+    suspend fun loadArchiveChats(limit: Int = 100) {
+        try {
+            Log.i(TAG, "loadArchiveChats: requesting top $limit archived chats")
+            client.send(TdApi.LoadChats(TdApi.ChatListArchive(), limit))
+            val chatsObj = client.execute(
+                TdApi.GetChats(TdApi.ChatListArchive(), limit),
+                timeoutMs = 10_000L,
+            )
+            if (chatsObj !is TdApi.Chats) {
+                Log.w(TAG, "getChats(archive) returned ${chatsObj?.javaClass?.simpleName ?: "null"}")
+                return
+            }
+            val ids = chatsObj.chatIds
+            val items: List<ChatItem> = ids.toList().mapNotNull { id: Long -> fetchChatItem(id) }
+            _archiveChats.value = items
+            _archiveCount.value = items.size
+            Log.i(TAG, "Loaded ${items.size} archived chats")
+        } catch (e: Throwable) {
+            Log.w(TAG, "loadArchiveChats failed", e)
         }
     }
 

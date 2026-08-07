@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -87,7 +88,11 @@ fun SearchScreen(viewModel: MainViewModel) {
     }
 
     val searchBarFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { searchBarFocus.requestFocus() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        try { searchBarFocus.requestFocus() }
+        catch (_: IllegalStateException) {}
+    }
 
     Box(
         modifier = Modifier
@@ -187,7 +192,7 @@ private fun SearchBar(
             modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("\ud83d\udd0d", fontSize = 24.sp)
+            Text("", fontSize = 24.sp)
             Spacer(Modifier.width(12.dp))
             Text(
                 text = if (query.isEmpty()) stringResource(R.string.search_placeholder) else query + "_",
@@ -262,7 +267,11 @@ private fun DpadKeyboard(
     onClose: () -> Unit,
 ) {
     val firstKey = remember { FocusRequester() }
-    LaunchedEffect(Unit) { firstKey.requestFocus() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        try { firstKey.requestFocus() }
+        catch (_: IllegalStateException) {}
+    }
 
     Box(
         modifier = Modifier

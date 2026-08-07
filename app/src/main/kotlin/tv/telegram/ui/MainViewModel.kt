@@ -41,6 +41,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val authState: StateFlow<AuthState> = auth.state
     val chatList = chatRepo.items
     val chatListLoaded = chatRepo.loaded
+    val archiveChats = chatRepo.archiveChats
+    val archiveCount = chatRepo.archiveCount
+    val viewingArchive = chatRepo.viewingArchive
+
+    /** Toggle the sidebar between main chat list and archived chat list. */
+    fun setViewingArchive(value: Boolean) {
+        chatRepo.setViewingArchive(value)
+    }
+
+    // ── Sign-out transition ────────────────────────────────
+    // True from the moment realSignOut() is called until TDLib reaches
+    // WaitQrCode (or hits an error). QrLoginScreen uses this to suppress
+    // the "Disconnected / Connecting / Unlocking" intermediate states
+    // and show a single "Signing out..." message instead.
+    private val _signingOut = MutableStateFlow(false)
+    val signingOut: StateFlow<Boolean> = _signingOut.asStateFlow()
+
     val searchQuery = chatRepo.searchQuery
     val searchSearching = chatRepo.searching
 
@@ -148,6 +165,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         closePlayer()
         _sidebarSelectedChatId.value = null
         _currentUser.value = null
+        _signingOut.value = true
         val app = getApplication<TgTvApp>()
         TdClient.realSignOut(
             context = app,
@@ -236,6 +254,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             auth.state.collect { st ->
                 if (st is AuthState.Ready) refreshMe()
+            }
+        }
+        // Clear the signingOut flag once TDLib reaches WaitQrCode (or Error)
+        // so QrLoginScreen stops suppressing intermediate states.
+        viewModelScope.launch {
+            auth.state.collect { st ->
+                if (st is AuthState.WaitQrCode || st is AuthState.Error) {
+                    _signingOut.value = false
+                }
             }
         }
     }

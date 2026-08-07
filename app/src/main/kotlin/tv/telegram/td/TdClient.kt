@@ -117,6 +117,56 @@ object TdClient {
     }
 
     /**
+     * Configure an outbound proxy for TDLib's MTProto connections.
+     *
+     * CRITICAL: TDLib does NOT honor Android's HTTP proxy settings
+     * (Settings → WiFi → Manual proxy, or
+     * `adb shell settings put global http_proxy ...`). It uses native
+     * sockets and only respects proxies configured via
+     * [TdApi.AddProxy]. For users behind a firewall (China, Iran, etc.)
+     * this MUST be called or TDLib tries to reach Telegram DCs directly
+     * and hangs forever at "Connecting to Telegram…".
+     *
+     * From inside the Android emulator, the host machine's loopback is
+     * reachable as `10.0.2.2` (NOT `127.0.0.1`, which is the emulator
+     * itself). On a real device, use the host's actual LAN IP.
+     *
+     * Must be called AFTER [startWithPaths] — the client must exist
+     * for the proxy to apply. Idempotent; no-op if [host] is blank
+     * or [port] is 0.
+     *
+     * @param host     Proxy server hostname or IP. Empty = no proxy.
+     * @param port     Proxy server port. 0 = no proxy.
+     * @param type     "socks5" (default) or "http".
+     * @param username Optional auth username. Empty for no auth.
+     * @param password Optional auth password. Empty for no auth.
+     */
+    fun enableProxy(
+        host: String,
+        port: Int,
+        type: String = "socks5",
+        username: String = "",
+        password: String = "",
+    ) {
+        if (host.isBlank() || port <= 0) {
+            Log.i(TAG, "Proxy not configured (host='$host' port=$port); direct connection")
+            return
+        }
+        val proxyType: TdApi.ProxyType = when (type.lowercase()) {
+            "http"       -> TdApi.ProxyTypeHttp(username, password, /*httpOnly*/ false)
+            "socks5", "" -> TdApi.ProxyTypeSocks5(username, password)
+            else -> {
+                Log.w(TAG, "Unknown PROXY_TYPE='$type'; falling back to SOCKS5")
+                TdApi.ProxyTypeSocks5(username, password)
+            }
+        }
+        Log.i(TAG, "Enabling $type proxy → $host:$port")
+        // Positional args: TdApi.java is compiled without -parameters,
+        // so Kotlin can't resolve the parameter names (sees p0/p1/p2/p3).
+        send(TdApi.AddProxy(host, port, true, proxyType))
+    }
+
+    /**
      * Send a query with optional direct-response handler.
      *
      * @param query    TDLib function call (any TdApi.Function subclass)

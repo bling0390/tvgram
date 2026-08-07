@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -91,13 +92,20 @@ private fun NavRail(
     onSelect: (MainViewModel.NavSection) -> Unit,
 ) {
     val entries = listOf(
-        NavEntry(MainViewModel.NavSection.Search,   "🔍", stringResource(R.string.nav_search)),
-        NavEntry(MainViewModel.NavSection.Chats,    "💬", stringResource(R.string.nav_chats)),
-        NavEntry(MainViewModel.NavSection.Settings, "⚙",  stringResource(R.string.nav_settings)),
+        NavEntry(MainViewModel.NavSection.Search,   "",   stringResource(R.string.nav_search)),
+        NavEntry(MainViewModel.NavSection.Chats,    "",   stringResource(R.string.nav_chats)),
+        NavEntry(MainViewModel.NavSection.Settings, "",   stringResource(R.string.nav_settings)),
     )
 
     val railFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { railFocus.requestFocus() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }  // wait for first composition pass so Modifier.focusRequester() is attached
+        try {
+            railFocus.requestFocus()
+        } catch (e: IllegalStateException) {
+            // benign race during navigation — FocusRequester detached before our effect ran
+        }
+    }
 
     Column(
         modifier = Modifier
