@@ -5,7 +5,6 @@
 
     <string name="login_title">用手机 Telegram 扫码登录</string>
     <string name="login_subtitle">1. 在手机上打开 Telegram\n2. 进入 设置 &gt; 设备 &gt; 扫描二维码\n3. 扫描此二维码完成登录</string>
-    <string name="login_waiting">等待确认…</string>
     <string name="login_failed">登录失败:%1$s</string>
 
     <string name="nav_search">搜索</string>

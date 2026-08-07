@@ -5,7 +5,6 @@
 
     <string name="login_title">用手機 Telegram 掃碼登入</string>
     <string name="login_subtitle">1. 在手機上開啟 Telegram\n2. 進入 設定 &gt; 裝置 &gt; 掃描 QR code\n3. 掃描此 QR code 登入</string>
-    <string name="login_waiting">等待確認…</string>
     <string name="login_failed">登入失敗:%1$s</string>
 
     <string name="nav_search">搜尋</string>
