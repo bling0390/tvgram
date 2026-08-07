@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -68,10 +69,20 @@ fun QrLoginScreen(viewModel: MainViewModel) {
             )
         } else when (val s = authState) {
             AuthState.Idle,
-            AuthState.WaitTdlibParams,
-            AuthState.LoggingIn -> StatusMessage(
+            AuthState.WaitTdlibParams -> StatusMessage(
                 title = stringResource(R.string.app_name),
                 subtitle = "Connecting to Telegram…",
+            )
+
+            // LoggingIn is the brief state between the user scanning the
+            // QR and TDLib reaching Ready. Keep the QrContent layout so
+            // there's no layout swap flash — just replace the QR bitmap
+            // with a CircularProgressIndicator (qrLink = null). The
+            // AppRoot-level Message("Signing in…") overlay sits on top.
+            AuthState.LoggingIn -> QrContent(
+                title = stringResource(R.string.login_title),
+                subtitle = stringResource(R.string.login_subtitle),
+                qrLink = null,
             )
 
             AuthState.WaitEncryptionKey -> StatusMessage(
@@ -108,10 +119,15 @@ fun QrLoginScreen(viewModel: MainViewModel) {
 private fun QrContent(
     title: String,
     subtitle: String,
-    qrLink: String,
-    alreadyLoggedIn: Boolean,
+    qrLink: String?,
+    alreadyLoggedIn: Boolean = false,
 ) {
-    val qrBitmap = remember(qrLink) { encodeQr(qrLink) }
+    // qrLink = null → "loading" state (e.g. LoggingIn right after the
+    // user scanned). Skip QR encoding entirely and fall through to the
+    // spinner fallback so we don't fire zxing during the transition.
+    val qrBitmap = qrLink
+        ?.takeIf { it.isNotBlank() }
+        ?.let { remember(it) { encodeQr(it) } }
 
     // Side-by-side layout: title/subtitle on the left, QR on the right.
     // Fills the 16:9 TV screen horizontally so there's no big black void
@@ -158,11 +174,19 @@ private fun QrContent(
                 contentScale = ContentScale.Fit,
             )
         } else {
+            // Loading / pre-QR state — render a dark spinner on the
+            // existing white surface so the visual size/shape matches
+            // the QR area exactly. Same 360dp square, same center
+            // alignment, just the content differs.
             Box(
                 modifier = Modifier.size(360.dp).background(Color.White),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("[ QR ]", color = Color.Black, fontSize = 28.sp)
+                CircularProgressIndicator(
+                    color = Color(0xFF1F1F1F),
+                    modifier = Modifier.size(48.dp),
+                    strokeWidth = 4.dp,
+                )
             }
         }
     }
