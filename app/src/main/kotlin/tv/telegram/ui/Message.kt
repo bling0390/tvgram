@@ -19,43 +19,55 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import tv.telegram.R
 
 /**
- * Top-level sign-out overlay. Rendered by [AppRoot] above whatever
- * screen is currently shown.
+ * Top-of-screen toast-style overlay for a transient status message.
  *
- * Why a separate top-level component (and not inlined into SettingsScreen):
- *   - When inlined into SettingsScreen, the banner's Alignment.TopCenter
- *     was relative to SettingsScreen's own Box bounds — which is inside
- *     HomeScreen, which itself has padding/safe-area insets. So the
- *     "center" was off-screen-center.
- *   - At the AppRoot level, the banner's Box parent is the full-screen
- *     fillMaxSize() root, so TopCenter really is screen-center.
- *   - As a bonus: lives above any screen transition, so the slide-out
- *     tween can complete cleanly even while AppRoot is swapping screens.
+ * Pure component — takes [visible] (animates show/hide) and [message]
+ * (the text to display). Knows nothing about MainViewModel or auth
+ * state; the caller drives the lifecycle.
  *
- * Driven by [MainViewModel.showSignOutBanner], which is decoupled from
- * [MainViewModel.signingOut] with a 350ms gap so the exit tween (250ms)
- * finishes before AppRoot swaps SettingsScreen out for QrLoginScreen.
+ * Animation:
+ *   enter = fadeIn (300ms) + slideInVertically from -fullHeight (300ms)
+ *   exit  = fadeOut (250ms) + slideOutVertically to -fullHeight (250ms)
+ *   easing = FastOutSlowIn on the slides (Material standard motion)
  *
- * The "signing out…" string comes from R.string.signing_out (3 locales).
+ * Visual:
+ *   - 25% black full-screen dim
+ *   - Top-anchored banner, screen-center horizontally
+ *   - 50% screen width, 12dp rounded corners, ~90% opaque dark surface
+ *   - 28dp white CircularProgressIndicator + 18sp white label
+ *
+ * Composition pattern in AppRoot (always rendered, AnimatedVisibility
+ * hides when not visible so there's no layout cost):
+ * ```
+ *   Message(
+ *       visible = showSignOutBanner,
+ *       message = stringResource(R.string.signing_out),
+ *   )
+ * ```
+ *
+ * Sibling overlay components planned for this layer:
+ *   - Drawer.kt → side-anchored panel (left/right)
+ *   - Dialog.kt → centered modal card
+ * Message stays the simple top toast variant — distinct shape, position,
+ * and animation from the others.
  */
 @Composable
-fun SignOutOverlay(viewModel: MainViewModel) {
-    val showSignOutBanner by viewModel.showSignOutBanner.collectAsStateWithLifecycle()
-
+fun Message(
+    visible: Boolean,
+    message: String,
+    modifier: Modifier = Modifier,
+    showProgress: Boolean = true,
+) {
     AnimatedVisibility(
-        visible = showSignOutBanner,
+        visible = visible,
         enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
             animationSpec = tween(300, easing = FastOutSlowInEasing),
             initialOffsetY = { fullHeight -> -fullHeight },
@@ -64,21 +76,19 @@ fun SignOutOverlay(viewModel: MainViewModel) {
             animationSpec = tween(250, easing = FastOutSlowInEasing),
             targetOffsetY = { fullHeight -> -fullHeight },
         ),
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Full-screen dim layer (alpha 0.25) — sits over the underlying
-            // screen to provide spatial context for the banner without
-            // fully blocking the page.
+            // Full-screen dim layer so the underlying screen stays visible
+            // but de-emphasized while the banner is up.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.25f)),
             )
 
-            // Top-anchored banner. Alignment.TopCenter inside the full-screen
-            // Box above gives true screen-center horizontal alignment.
-            // 50% width (per design tweak) leaves 25% empty on each side.
+            // Top banner, screen-center horizontally (Alignment.TopCenter
+            // inside the full-screen Box).
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -92,14 +102,16 @@ fun SignOutOverlay(viewModel: MainViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    CircularProgressIndicator(
-                        color = Color.White,
-                        modifier = Modifier.size(28.dp),
-                        strokeWidth = 3.dp,
-                        trackColor = Color.White.copy(alpha = 0.3f),
-                    )
+                    if (showProgress) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(28.dp),
+                            strokeWidth = 3.dp,
+                            trackColor = Color.White.copy(alpha = 0.3f),
+                        )
+                    }
                     Text(
-                        text = stringResource(R.string.signing_out),
+                        text = message,
                         color = Color.White,
                         fontSize = 18.sp,
                     )

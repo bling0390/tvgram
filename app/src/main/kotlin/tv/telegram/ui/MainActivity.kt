@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import tv.telegram.R
 import tv.telegram.td.AuthState
 import tv.telegram.ui.home.HomeScreen
 import tv.telegram.ui.login.QrLoginScreen
@@ -51,18 +53,17 @@ private fun AppRoot(viewModel: MainViewModel) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     val playerIndex by viewModel.playerMediaIndex.collectAsStateWithLifecycle()
     val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
+    val showSignOutBanner by viewModel.showSignOutBanner.collectAsStateWithLifecycle()
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             // During sign-out, stay on the screen that initiated the wipe so
-            // SettingsScreen can render its own loading overlay (the page the
-            // user just clicked). The natural switch to QrLoginScreen happens
-            // once [signingOut] flips back to false, which is wired in
+            // SettingsScreen (or whatever was active) doesn't get yanked to
+            // QrLoginScreen mid-click. The natural switch happens once
+            // [signingOut] flips back to false, which is wired in
             // MainViewModel.init to fire when TDLib reaches WaitQrCode (or
-            // Error). Without this guard AppRoot would jump to QrLoginScreen
-            // the instant auth leaves Ready, and the user would see a generic
-            // "Signing out…" placeholder on the QR screen instead of a real
-            // loading state on the page they just clicked.
+            // Error) after a 350ms delay so the Message overlay's exit tween
+            // can finish first.
             signingOut -> {
                 if (playerIndex != null) {
                     PlayerScreen(viewModel = viewModel)
@@ -83,14 +84,13 @@ private fun AppRoot(viewModel: MainViewModel) {
             }
         }
 
-        // Top-level sign-out overlay. Sits above whichever screen the
-        // `when` above picked, anchored to the full-screen Box so its
-        // horizontal center is screen-center (not the center of any
-        // sub-screen's content area). Only added to composition while
-        // signing out; AnimatedVisibility inside handles the actual
-        // visibility lifecycle.
-        if (signingOut) {
-            SignOutOverlay(viewModel = viewModel)
-        }
+        // Transient status overlay — pure component, see Message.kt.
+        // Always in composition; AnimatedVisibility inside Message hides it
+        // when [showSignOutBanner] is false, so there's no layout cost
+        // outside the active sign-out window.
+        Message(
+            visible = showSignOutBanner,
+            message = stringResource(R.string.signing_out),
+        )
     }
 }
