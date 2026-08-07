@@ -5,7 +5,7 @@
 
     <!-- Login screen -->
     <string name="login_title">Sign in to Telegram</string>
-    <string name="login_subtitle">Open Telegram on your phone, then scan this QR code</string>
+    <string name="login_subtitle">On your phone: Settings → Devices → Link Desktop Device, then scan this QR code</string>
     <string name="login_waiting">Waiting for confirmation…</string>
     <string name="login_failed">Login failed: %1$s</string>
 
