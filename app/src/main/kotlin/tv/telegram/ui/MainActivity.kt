@@ -72,6 +72,15 @@ private fun AppRoot(viewModel: MainViewModel) {
                     HomeScreen(viewModel = viewModel)
                 }
             }
+            // During sign-in, hold on QrLoginScreen even after TDLib hits
+            // Ready so the "Signing in…" Message overlay can fade in +
+            // stay visible on top of the QR page (not the home page). The
+            // 500ms delay in MainViewModel.init between auth→Ready and
+            // signingIn=false is what keeps AppRoot here long enough for
+            // the enter tween (300ms) to complete before the screen swap.
+            signingIn -> {
+                QrLoginScreen(viewModel = viewModel)
+            }
             authState !is AuthState.Ready -> {
                 QrLoginScreen(viewModel = viewModel)
             }
