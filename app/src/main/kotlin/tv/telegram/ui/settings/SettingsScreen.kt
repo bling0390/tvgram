@@ -2,13 +2,6 @@
 
 package tv.telegram.ui.settings
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,9 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,7 +42,6 @@ import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
 
 /**
@@ -76,7 +65,6 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val user by viewModel.currentUser.collectAsStateWithLifecycle()
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
-    val showSignOutBanner by viewModel.showSignOutBanner.collectAsStateWithLifecycle()
 
     var showAbout by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
@@ -149,63 +137,10 @@ fun SettingsScreen(viewModel: MainViewModel) {
 
         if (showAbout) AboutDialog(onDismiss = { showAbout = false })
 
-        // Top-most layer: full-screen 0.25-alpha dim + a top-anchored
-        // banner with spinner + label. Both fade and slide together,
-        // driven by [showSignOutBanner] (not [signingOut]) so the
-        // slide-out tween has time to finish before AppRoot swaps the
-        // screen out — see MainViewModel._showSignOutBanner for the
-        // timing rationale.
-        AnimatedVisibility(
-            visible = showSignOutBanner,
-            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
-                animationSpec = tween(300, easing = FastOutSlowInEasing),
-                initialOffsetY = { fullHeight -> -fullHeight },
-            ),
-            exit = fadeOut(animationSpec = tween(250)) + slideOutVertically(
-                animationSpec = tween(250, easing = FastOutSlowInEasing),
-                targetOffsetY = { fullHeight -> -fullHeight },
-            ),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                // Dim layer
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.25f)),
-                )
-
-                // Top banner — "bottom overlay" template from the Android
-                // TV design guide, but anchored to TopCenter so the banner
-                // has somewhere to slide IN from above (and OUT to, on exit).
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth(0.5f)
-                        .padding(horizontal = 48.dp, vertical = 32.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xE61E1E1E))
-                        .padding(horizontal = 28.dp, vertical = 18.dp),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        CircularProgressIndicator(
-                            color = Color.White,
-                            modifier = Modifier.size(28.dp),
-                            strokeWidth = 3.dp,
-                            trackColor = Color.White.copy(alpha = 0.3f),
-                        )
-                        Text(
-                            text = stringResource(R.string.signing_out),
-                            color = Color.White,
-                            fontSize = 18.sp,
-                        )
-                    }
-                }
-            }
-        }
+        // Sign-out overlay is no longer inlined here — see
+        // [tv.telegram.ui.SignOutOverlay] (rendered by AppRoot at the
+        // full-screen level so its horizontal center is screen-center,
+        // not the center of SettingsScreen's bounds).
     }
 
     // Confirmation dialog lives outside the if/else so it can never be
@@ -232,18 +167,6 @@ fun SettingsScreen(viewModel: MainViewModel) {
         )
     }
 }
-
-/**
- * Full-screen loading overlay shown on SettingsScreen while
- * [MainViewModel.signingOut] is true. The actual data wipe and TDLib
- * restart happens inside [MainViewModel.realSignOut] — this just
- * gives the user feedback on the page they just clicked.
- *
- * Moved to an inlined AnimatedVisibility block in [SettingsScreen] —
- * the slide-in / slide-out tween needs to be driven by
- * [MainViewModel.showSignOutBanner] (not [MainViewModel.signingOut])
- * so the exit animation completes before AppRoot swaps the screen.
- */
 
 
 @Composable
