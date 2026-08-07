@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +43,7 @@ import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
 
 /**
@@ -64,67 +66,87 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val lang by viewModel.language.collectAsStateWithLifecycle()
     val user by viewModel.currentUser.collectAsStateWithLifecycle()
     val authState by viewModel.authState.collectAsStateWithLifecycle()
+    val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
 
     var showAbout by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
 
     val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { firstFocus.requestFocus() }
+    LaunchedEffect(signingOut) { if (!signingOut) firstFocus.requestFocus() }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(32.dp),
+            .background(MaterialTheme.colorScheme.background),
     ) {
-        Text(
-            text = stringResource(R.string.settings_title),
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(24.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            item {
-                SettingsRow(
-                    title = stringResource(R.string.settings_account),
-                    value = accountValue(authState, user),
-                    onClick = { /* read-only */ },
-                    fr = firstFocus,
+        // While [signingOut] is true we render ONLY the overlay — the
+        // settings list is taken out of composition so the user can't
+        // tap into it during the wipe, and so focus has nothing else to
+        // land on. AppRoot guards this state in MainActivity so the screen
+        // is not yanked to QrLoginScreen until TDLib reaches WaitQrCode.
+        if (signingOut) {
+            SigningOutOverlay()
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_title),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
                 )
+                Spacer(Modifier.height(24.dp))
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    item {
+                        SettingsRow(
+                            title = stringResource(R.string.settings_account),
+                            value = accountValue(authState, user),
+                            onClick = { /* read-only */ },
+                            fr = firstFocus,
+                        )
+                    }
+                    item {
+                        SettingsRow(
+                            title = stringResource(R.string.settings_language),
+                            value = languageLabel(lang),
+                            onClick = { viewModel.setLanguage(lang.next()) },
+                        )
+                    }
+                    item {
+                        SettingsRow(
+                            title = stringResource(R.string.settings_theme),
+                            value = themeLabel(theme),
+                            onClick = { viewModel.setTheme(theme.next()) },
+                        )
+                    }
+                    item {
+                        SettingsRow(
+                            title = stringResource(R.string.settings_about),
+                            value = stringResource(R.string.settings_about_value, BuildConfig.VERSION_NAME),
+                            onClick = { showAbout = true },
+                        )
+                    }
+                    item {
+                        SettingsRow(
+                            title = stringResource(R.string.settings_signout),
+                            value = stringResource(R.string.settings_signout_value),
+                            onClick = { showLogoutConfirm = true },
+                            danger = true,
+                        )
+                    }
+                }
             }
-            item {
-                SettingsRow(
-                    title = stringResource(R.string.settings_language),
-                    value = languageLabel(lang),
-                    onClick = { viewModel.setLanguage(lang.next()) },
-                )
-            }
-            item {
-                SettingsRow(
-                    title = stringResource(R.string.settings_theme),
-                    value = themeLabel(theme),
-                    onClick = { viewModel.setTheme(theme.next()) },
-                )
-            }
-            item {
-                SettingsRow(
-                    title = stringResource(R.string.settings_about),
-                    value = stringResource(R.string.settings_about_value, BuildConfig.VERSION_NAME),
-                    onClick = { showAbout = true },
-                )
-            }
-            item {
-                SettingsRow(
-                    title = stringResource(R.string.settings_signout),
-                    value = stringResource(R.string.settings_signout_value),
-                    onClick = { showLogoutConfirm = true },
-                    danger = true,
-                )
-            }
+
+            if (showAbout) AboutDialog(onDismiss = { showAbout = false })
         }
     }
 
+    // Confirmation dialog lives outside the if/else so it can never be
+    // blocked by the overlay branch. (In practice signingOut becomes
+    // true only after the user has already dismissed this dialog.)
     if (showLogoutConfirm) {
         AlertDialog(
             onDismissRequest = { showLogoutConfirm = false },
@@ -145,8 +167,37 @@ fun SettingsScreen(viewModel: MainViewModel) {
             },
         )
     }
+}
 
-    if (showAbout) AboutDialog(onDismiss = { showAbout = false })
+/**
+ * Full-screen loading overlay shown on SettingsScreen while
+ * [MainViewModel.signingOut] is true. The actual data wipe and TDLib
+ * restart happens inside [MainViewModel.realSignOut] — this just
+ * gives the user feedback on the page they just clicked.
+ */
+@Composable
+private fun SigningOutOverlay() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(48.dp),
+                strokeWidth = 4.dp,
+            )
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = stringResource(R.string.signing_out),
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = 18.sp,
+            )
+        }
+    }
 }
 
 @Composable

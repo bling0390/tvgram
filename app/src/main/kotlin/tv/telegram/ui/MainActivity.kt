@@ -47,8 +47,25 @@ class MainActivity : ComponentActivity() {
 private fun AppRoot(viewModel: MainViewModel) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     val playerIndex by viewModel.playerMediaIndex.collectAsStateWithLifecycle()
+    val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
 
     when {
+        // During sign-out, stay on the screen that initiated the wipe so
+        // SettingsScreen can render its own loading overlay (the page the
+        // user just clicked). The natural switch to QrLoginScreen happens
+        // once [signingOut] flips back to false, which is wired in
+        // MainViewModel.init to fire when TDLib reaches WaitQrCode (or
+        // Error). Without this guard AppRoot would jump to QrLoginScreen
+        // the instant auth leaves Ready, and the user would see a generic
+        // "Signing out…" placeholder on the QR screen instead of a real
+        // loading state on the page they just clicked.
+        signingOut -> {
+            if (playerIndex != null) {
+                PlayerScreen(viewModel = viewModel)
+            } else {
+                HomeScreen(viewModel = viewModel)
+            }
+        }
         authState !is AuthState.Ready -> {
             QrLoginScreen(viewModel = viewModel)
         }
