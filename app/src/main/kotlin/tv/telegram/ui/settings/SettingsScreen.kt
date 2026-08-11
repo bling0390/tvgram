@@ -45,17 +45,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 
 /**
- * SettingsScreen — v0.9.0 with real account info, real sign-out, light
- * theme, and 3-locale picker.
- *
- * 5 rows:
- *   1. Account info     — shows TDLib getMe (display name / id / phone)
- *   2. Language          — cycle en / 简体中文 / 繁體中文
- *   3. Theme             — cycle Dark / Light / System
- *   4. About Tvgram      — version + repo dialog
- *   5. Sign out          — two-step confirm; calls realSignOut() which
- *                          stops the TDLib process + wipes on-disk state
- *                          + restarts the client.
+ * SettingsScreen. 6 rows: account info, language, theme, about, clear
+ * cache (D-031), sign out. Each taps into a confirm dialog or cycle.
  */
 @Composable
 fun SettingsScreen(viewModel: MainViewModel) {
@@ -65,8 +56,6 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val user by viewModel.currentUser.collectAsStateWithLifecycle()
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
-    // D-031: cache row + confirm dialog state. cacheSizeBytes is refreshed
-    // on mount (LaunchedEffect below) and after a successful cleanup.
     val cacheSizeBytes by viewModel.cacheSizeBytes.collectAsStateWithLifecycle()
     val cacheClearProgress by viewModel.cacheClearProgress.collectAsStateWithLifecycle()
 
@@ -76,8 +65,6 @@ fun SettingsScreen(viewModel: MainViewModel) {
 
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(signingOut) { if (!signingOut) firstFocus.requestFocus() }
-    // Refresh cache size when the screen mounts. The walk is fast (< 1s
-    // even on 50 GB) but we run it on Dispatchers.IO inside the VM.
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
     Box(
@@ -85,11 +72,8 @@ fun SettingsScreen(viewModel: MainViewModel) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        // Settings list + about dialog stay rendered during sign-out —
-        // only a translucent mask is layered on top so the user can still
-        // see which page they clicked. AppRoot guards this state in
-        // MainActivity so the screen is not yanked to QrLoginScreen until
-        // TDLib reaches WaitQrCode.
+        // Settings list + about dialog stay rendered during sign-out so
+        // the user can still see which page they clicked.
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -151,16 +135,8 @@ fun SettingsScreen(viewModel: MainViewModel) {
         }
 
         if (showAbout) AboutDialog(onDismiss = { showAbout = false })
-
-        // Sign-out overlay is no longer inlined here — see
-        // [tv.telegram.ui.SignOutOverlay] (rendered by AppRoot at the
-        // full-screen level so its horizontal center is screen-center,
-        // not the center of SettingsScreen's bounds).
     }
 
-    // Confirmation dialog lives outside the if/else so it can never be
-    // blocked by the overlay branch. (In practice signingOut becomes
-    // true only after the user has already dismissed this dialog.)
     if (showLogoutConfirm) {
         AlertDialog(
             onDismissRequest = { showLogoutConfirm = false },
@@ -183,10 +159,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
     }
 
     // D-031: clear cache confirm dialog. Three states driven by
-    // [cacheClearProgress]:
-    //   - null  → idle: show size + confirm/cancel
-    //   - 0..1  → in progress: show %, no buttons, dismiss disabled
-    //   - 1     → done: show "Done" button + refresh size on dismiss
+    // [cacheClearProgress]: null = idle, 0..1 = in progress, 1 = done.
     if (showClearCacheConfirm) {
         val progress = cacheClearProgress
         val isProgressing = progress != null && progress < 1f
@@ -282,12 +255,7 @@ private fun ThemeMode.next(): ThemeMode = when (this) {
     ThemeMode.System -> ThemeMode.Dark
 }
 
-/**
- * Format a byte count for the cache row. IEC binary (KiB=1024) but
- * labeled KB/MB/GB to match what users expect from OS file managers.
- * Kept private to SettingsScreen — it's UI copy and tied to the
- * locale conventions chosen here.
- */
+/** Format bytes as KB/MB/GB (binary 1024-based, decimal labels). */
 private fun formatCacheSize(bytes: Long): String = when {
     bytes < 1024L -> "$bytes B"
     bytes < 1024L * 1024 -> "%.1f KB".format(bytes / 1024.0)

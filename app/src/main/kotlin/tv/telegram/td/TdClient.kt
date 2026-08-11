@@ -23,26 +23,10 @@ import java.io.File
 /**
  * TdClient — drives TDLib via the JNI bindings in libtdjni.so.
  *
- * Architecture (D-029, replaces D-027):
- *   - libtdjni.so is the TDLib JNI library (bundled in libtd/ module's
- *     src/main/libs/<abi>/). [Client.create] loads it via the standard
- *     JNI mechanism (Android extracts from APK) and spawns a worker
- *     thread that handles all TDLib I/O.
- *   - We treat updates (sent via the updateHandler) and direct responses
- *     (sent via per-query resultHandlers) separately. Updates are
- *     broadcast on the [updates] SharedFlow; direct responses are routed
- *     to the calling site via [send]'s [onResult] callback or [execute]'s
- *     suspend return.
- *
- * Replacement history:
- *   - v0.9.0 (D-027): ProcessBuilder(libtdjson.so) — did not work on
- *     Android because the artifact was ET_DYN (shared object), not ET_EXEC.
- *   - v1.0.0 (D-029): JNI via libtdjni.so — typed [TdApi.Function] / [TdApi.Object].
- *
- * Lifecycle:
- *   1. [TgTvApp.onCreate] → [startWithPaths] — preserves login state.
- *   2. [MainViewModel.realSignOut] → [realSignOut] — wipes state + restart.
- *   3. [Client.close] is called in [stop] to release the native thread.
+ * D-029: replaces D-027's ProcessBuilder(libtdjson.so) (which was ET_DYN,
+ * not ET_EXEC). The [Client.create] loads libtdjni.so, spawns a worker
+ * thread, and we surface two channels: broadcast updates on [updates],
+ * direct responses via [send] / [execute].
  */
 object TdClient {
 
@@ -57,18 +41,7 @@ object TdClient {
     )
     val updates: SharedFlow<TdApi.Object> = _updates.asSharedFlow()
 
-    /**
-     * Cache-cleanup progress broadcaster. D-031:
-     *   - null   = idle (no cleanup ever ran, or last cleanup was reset)
-     *   - 0..1   = in progress (fraction of files deleted)
-     *   - 1f     = finished (UI should call [resetCacheClearProgress] to
-     *              dismiss its progress indicator and put the screen back
-     *              to the idle state)
-     *
-     * Surged into SharedFlow territory would be misleading — we only
-     * have one current value at a time and need collectAsStateWithLifecycle
-     * semantics, so StateFlow is the right shape.
-     */
+    /** D-031. null = idle, 0..1 = in progress, 1f = finished. */
     private val _cacheClearProgress = MutableStateFlow<Float?>(null)
     val cacheClearProgress: StateFlow<Float?> = _cacheClearProgress.asStateFlow()
 
@@ -76,14 +49,8 @@ object TdClient {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     /**
-     * Start the TDLib client. Idempotent.
-     *
-     * Steps:
-     *   1. Create the TDLib [Client] (loads libtdjni.so, spawns worker thread)
-     *   2. Send setTdlibParameters with the on-disk db / files dirs
-     *
-     * The directories are NOT wiped here — we want login state to persist
-     * across app restarts. [realSignOut] does the wipe.
+     * Start the TDLib client. Idempotent. Dirs are NOT wiped — login
+     * state persists across app restarts; [realSignOut] does the wipe.
      */
     fun startWithPaths(
         context: Context,
@@ -98,25 +65,21 @@ object TdClient {
         }
         started = true
 
-        // Ensure dirs exist (no destructive wipe — see D-029).
         runCatching {
             File(databaseDirectory).mkdirs()
             File(filesDirectory).mkdirs()
         }.onFailure { Log.w(TAG, "Failed to ensure TDLib dirs", it) }
 
-        // Spawn the TDLib client. Native lib is loaded by Client.<clinit>
-        // via NativeClient's static System.loadLibrary("tdjni").
+        // Native lib is loaded by Client.<clinit> via System.loadLibrary("tdjni").
         val c = Client.create(
-            { obj -> dispatchUpdate(obj) },   // updateHandler — broadcasts everything
+            { obj -> dispatchUpdate(obj) },
             { e -> Log.w("TDLib-update", "update handler threw", e) },
             { e -> Log.w("TDLib-default", "default handler threw", e) },
         )
         client = c
         Log.i(TAG, "TDLib client created; sending setTdlibParameters")
 
-        // Build setTdlibParameters.
-        // Use message_database for chat history so search / pagination works.
-        // Use `this.field = param` to disambiguate from the same-named receiver field.
+        // `this.field = param` disambiguates from the same-named receiver field.
         val params = TdApi.TdlibParameters().apply {
             this.apiId = apiId
             this.apiHash = apiHash
@@ -140,26 +103,13 @@ object TdClient {
      * Configure an outbound proxy for TDLib's MTProto connections.
      *
      * CRITICAL: TDLib does NOT honor Android's HTTP proxy settings
-     * (Settings → WiFi → Manual proxy, or
-     * `adb shell settings put global http_proxy ...`). It uses native
-     * sockets and only respects proxies configured via
-     * [TdApi.AddProxy]. For users behind a firewall (China, Iran, etc.)
-     * this MUST be called or TDLib tries to reach Telegram DCs directly
-     * and hangs forever at "Connecting to Telegram…".
+     * (Settings → WiFi → Manual proxy, or `adb shell settings put global
+     * http_proxy ...`). It uses native sockets and only respects proxies
+     * configured via [TdApi.AddProxy]. For users behind a firewall this
+     * MUST be called or TDLib reaches DCs directly and hangs.
      *
-     * From inside the Android emulator, the host machine's loopback is
-     * reachable as `10.0.2.2` (NOT `127.0.0.1`, which is the emulator
-     * itself). On a real device, use the host's actual LAN IP.
-     *
-     * Must be called AFTER [startWithPaths] — the client must exist
-     * for the proxy to apply. Idempotent; no-op if [host] is blank
-     * or [port] is 0.
-     *
-     * @param host     Proxy server hostname or IP. Empty = no proxy.
-     * @param port     Proxy server port. 0 = no proxy.
-     * @param type     "socks5" (default) or "http".
-     * @param username Optional auth username. Empty for no auth.
-     * @param password Optional auth password. Empty for no auth.
+     * Must be called AFTER [startWithPaths]. No-op if [host] blank or
+     * [port] 0. Loopback in emulator = `10.0.2.2` (NOT `127.0.0.1`).
      */
     fun enableProxy(
         host: String,
@@ -187,11 +137,8 @@ object TdClient {
     }
 
     /**
-     * Send a query with optional direct-response handler.
-     *
-     * @param query    TDLib function call (any TdApi.Function subclass)
-     * @param onResult Optional handler for the direct response. Most callers
-     *                 leave this null and listen on [updates] instead.
+     * Send a query with optional direct-response handler. Most callers
+     * leave [onResult] null and listen on [updates] instead.
      */
     fun send(query: TdApi.Function, onResult: ((TdApi.Object) -> Unit)? = null) {
         val c = client
@@ -200,12 +147,6 @@ object TdClient {
             return
         }
         if (onResult == null) {
-            // Fire-and-forget: TDLib's result callback is still wired up
-            // internally; for queries like RequestQrCodeAuthentication,
-            // failure surfaces as the same auth state staying in
-            // WaitPhoneNumber (no UpdateAuthorizationState transition),
-            // which we can detect by our pendingQrRequest guard never
-            // clearing. Log here so logcat shows what we asked for.
             Log.d(TAG, "send(fire-and-forget) ${query.javaClass.simpleName}")
             c.send(query, null)
         } else {
@@ -220,10 +161,7 @@ object TdClient {
         }
     }
 
-    /**
-     * Suspend until we get a direct response to [query] (or [timeoutMs] elapses).
-     * Used for one-shot lookups (e.g. getMe, getChat).
-     */
+    /** Suspend until we get a direct response to [query] (or [timeoutMs] elapses). */
     suspend fun execute(query: TdApi.Function, timeoutMs: Long = 10_000L): TdApi.Object? {
         val c = client ?: run {
             Log.w(TAG, "execute() before start(); dropping ${query.javaClass.simpleName}")
@@ -240,12 +178,9 @@ object TdClient {
     }
 
     /**
-     * Stop the TDLib client.
-     *
-     * Sends a `close` query, then calls [Client.close] to release native
-     * resources (it blocks until the worker thread exits). After this
-     * call, the process MUST be re-started via [startWithPaths] (or
-     * [realSignOut] to also wipe state).
+     * Stop the TDLib client. Sends a `close` query, then calls
+     * [Client.close] to release native resources (blocks until the
+     * worker thread exits). After this, restart via [startWithPaths].
      */
     fun stop() {
         val c = client
@@ -266,17 +201,9 @@ object TdClient {
      * Real sign-out: stop TDLib, wipe DB, restart fresh.
      *
      * D-031: only the database directory is wiped (auth keys, secret
-     * chat keys, drafts, contacts cache — everything that ties the local
-     * install to the account). The file cache directory is left intact;
-     * TDLib re-validates cached files on next login by file_id and
-     * re-downloads stale ones. Cache eviction is a separate, explicit
-     * user action — see [clearCache].
-     *
-     * The wipe happens here (NOT in [startWithPaths]) so a normal app
-     * launch preserves the existing login session — see D-029.
-     *
-     * @return true if the existing client was stopped + restarted, false
-     *         if there was no client and we only wiped DB.
+     * chat keys, drafts, contacts cache). The file cache directory is
+     * left intact — TDLib re-validates cached files on next login by
+     * file_id. Cache eviction is explicit user action via [clearCache].
      */
     fun realSignOut(
         context: Context,
@@ -298,10 +225,7 @@ object TdClient {
         return true
     }
 
-    /**
-     * Wipe only the TDLib database directory. The file cache is left
-     * intact — see D-031.
-     */
+    /** Wipe only the TDLib database directory. See D-031 on file cache. */
     private fun wipeDatabase(databaseDirectory: String) {
         runCatching {
             val dbDir = File(databaseDirectory)
@@ -314,18 +238,15 @@ object TdClient {
 
     /**
      * Clear TDLib's file cache directory. Used by Settings → "清理缓存",
-     * NOT by [realSignOut]. Runs async on Dispatchers.IO and reports
-     * progress via [cacheClearProgress] (null = idle, 0..1 = in progress).
+     * NOT by [realSignOut]. Async on Dispatchers.IO with progress via
+     * [cacheClearProgress].
      *
-     * The caller MUST have already stopped TDLib via [stop] (or [realSignOut])
-     * before invoking this — otherwise TDLib may still be writing into the
-     * directory mid-delete and we'll race against it.
+     * The caller MUST have stopped TDLib via [stop] before invoking this
+     * — otherwise TDLib is still writing into the directory mid-delete
+     * and we'll race against it.
      *
-     * Walks the tree and deletes files one at a time (not deleteRecursively)
-     * so we can report meaningful progress to a TV UI that may otherwise
-     * sit on a frozen spinner for 30s+ on a fully populated cache.
-     *
-     * @return the launched Job. Cancel to abort the cleanup.
+     * One-at-a-time deletes (not deleteRecursively) so the TV UI sees
+     * real progress instead of a frozen spinner for 30s+ on a full cache.
      */
     fun clearCache(filesDirectory: String): Job = scope.launch(Dispatchers.IO) {
         _cacheClearProgress.value = 0f
@@ -350,35 +271,25 @@ object TdClient {
                 runCatching { f.delete() }.onFailure {
                     Log.w(TAG, "clearCache: failed to delete ${f.absolutePath}", it)
                 }
-                // Throttle progress updates — every 200 files, or on the last
-                // one. 200 is empirically small enough that the UI feels
-                // responsive but large enough not to flood the main
-                // dispatcher with StateFlow emissions.
+                // Throttle progress — every 200 files. 200 is small enough
+                // for UI responsiveness, large enough not to flood the
+                // main dispatcher with StateFlow emissions.
                 if (i % 200 == 0 || i == total - 1) {
                     _cacheClearProgress.value = (i + 1).toFloat() / total
                 }
             }
-            // The empty subdirectories themselves are harmless and TDLib
-            // will recreate them on next login, but delete them anyway for
-            // tidiness.
             runCatching { dir.deleteRecursively() }
             Log.i(TAG, "clearCache: done")
         } catch (e: Throwable) {
             Log.w(TAG, "clearCache: failed", e)
         } finally {
-            // Always end in the "done" state so the UI can dismiss its
-            // progress indicator — even on partial failure, we want to
-            // surface that cleanup ran (rather than staying stuck at 0
-            // forever).
+            // Always end in "done" — even on partial failure, surface
+            // that cleanup ran (rather than sticking at 0).
             _cacheClearProgress.value = 1f
         }
     }
 
-    /**
-     * Walk the cache directory and sum file sizes. Synchronous; intended
-     * to be called from a background dispatcher by the UI layer (e.g. when
-     * the Settings screen mounts). Returns 0 if the directory doesn't exist.
-     */
+    /** Sum of file sizes in the cache directory. Returns 0 if dir missing. */
     fun cacheSize(filesDirectory: String): Long {
         val dir = File(filesDirectory)
         if (!dir.exists()) return 0L
@@ -387,18 +298,12 @@ object TdClient {
             .getOrDefault(0L)
     }
 
-    /**
-     * Reset [cacheClearProgress] back to null (idle). Call after the UI
-     * has acknowledged the "done" state and dismissed its progress UI.
-     */
+    /** Reset [cacheClearProgress] to null (idle). */
     fun resetCacheClearProgress() {
         _cacheClearProgress.value = null
     }
 
-    /**
-     * Updates arrive here via the updateHandler. Broadcast on the SharedFlow
-     * for ViewModels to collect.
-     */
+    /** Updates broadcast on the SharedFlow for ViewModels to collect. */
     private fun dispatchUpdate(obj: TdApi.Object) {
         val emitted = _updates.tryEmit(obj)
         if (!emitted) {

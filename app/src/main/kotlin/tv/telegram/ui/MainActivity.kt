@@ -25,21 +25,10 @@ import tv.telegram.ui.player.PlayerScreen
 import tv.telegram.ui.theme.TvgramTheme
 
 /**
- * Single Activity, Compose-driven.
- *
- * Top-level navigation:
- *   AuthState not Ready                    → QrLoginScreen
- *   AuthState.Ready + player open          → PlayerScreen
- *   AuthState.Ready (no player)            → HomeScreen
- *                                          (Search / Chats / Settings via NavRail)
- *
- * v0.8.0 collapsed the old "ChatListScreen" + "ChatScreen" into a single
- * HomeScreen with an internal NavRail; the old two-screen model is gone.
- *
- * v1.0.0 (D-032): stable auth routing delegated to androidx.navigation
- * via [AppNavHost]. Transient hold states (signingOut / signingIn) stay
+ * Single Activity, Compose-driven. D-032: stable auth routing via
+ * [AppNavHost]; transient hold states (signingOut / signingIn) stay
  * at AppRoot above NavHost so they can override routing during the
- * brief transition window — see the comment on [AppRoot].
+ * brief transition window.
  */
 class MainActivity : ComponentActivity() {
 
@@ -59,23 +48,11 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * AppRoot — three layers stacked in a Box:
- *
- *   1. Transient hold states (signingOut / signingIn) render the
- *      current screen directly so the "Signing out…" / "Signing in…"
- *      overlays can sit on top of it. Bypasses NavHost entirely.
- *   2. Otherwise, [AppNavHost] handles the three stable routes
- *      (qrLogin / home / player) via NavController.
- *   3. Two [Message] overlays always live in composition, hidden by
- *      their own AnimatedVisibility when not active.
- *
- * Why splitting this way: signingOut / signingIn are real transient
- * flags that need to keep the current screen visible while TDLib
- * settles (e.g., TDLib takes ~1s to walk Ready → Closed →
- * WaitPhoneNumber → WaitOtherDeviceConfirmation before signingOut
- * can be flipped to false). Routing through NavHost during that
- * window would race the auth state changes and tear the layout.
- * Keeping them at AppRoot is the simplest correct fix.
+ * AppRoot. Why split hold states above NavHost: signingOut / signingIn
+ * are transient flags that need to keep the current screen visible
+ * while TDLib settles (~1s to walk Ready → Closed → WaitPhoneNumber →
+ * WaitOtherDeviceConfirmation). Routing through NavHost during that
+ * window races auth state changes and tears the layout.
  */
 @Composable
 private fun AppRoot(viewModel: MainViewModel) {
@@ -118,23 +95,10 @@ private fun AppRoot(viewModel: MainViewModel) {
 }
 
 /**
- * AppNavHost — NavHost-based stable auth routing.
- *
- * Routes:
- *   - "qrLogin"  → [QrLoginScreen]
- *   - "home"     → [HomeScreen]    (Search / Chats / Settings via internal NavRail)
- *   - "player"   → [PlayerScreen]
- *
- * Player state is still owned by MainViewModel (`_playerMediaIndex`)
- * — kept there so sign-out / signingOut still work without a back
- * stack. NavController reacts to StateFlow changes via two
- * [LaunchedEffect]s, so the screens themselves don't need to know
- * about navigation. This means ChatsScreen / PlayerScreen /
- * HomeScreen did NOT need changes for D-032.
- *
- * Auth-driven navigate() uses popUpTo(startDestination, inclusive=true)
- * so the user can't Back into the wrong auth state. Player open/close
- * is a normal push/pop so the system Back button pops Player → Home.
+ * AppNavHost. Auth-driven navigate() uses popUpTo(startDestination,
+ * inclusive=true) so the user can't Back into the wrong auth state.
+ * Player open/close is a normal push/pop so the system Back button
+ * pops Player → Home.
  */
 @Composable
 private fun AppNavHost(
@@ -144,9 +108,6 @@ private fun AppNavHost(
 ) {
     val navController = rememberNavController()
 
-    // Sync auth → nav. When auth flips between Ready and not, clear
-    // the back stack and navigate to the new home so the user can't
-    // Back into the wrong auth state.
     LaunchedEffect(authState) {
         val target = if (authState is AuthState.Ready) "home" else "qrLogin"
         val current = navController.currentDestination?.route
@@ -160,9 +121,6 @@ private fun AppNavHost(
         }
     }
 
-    // Sync player → nav. openPlayer() sets _playerMediaIndex, which
-    // triggers push to "player". closePlayer() sets null, which pops
-    // back to whatever was below (typically "home").
     LaunchedEffect(playerIndex) {
         val current = navController.currentDestination?.route
         when {

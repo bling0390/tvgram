@@ -23,15 +23,8 @@ import tv.telegram.td.TdMediaRepository
 import tv.telegram.td.TdUser
 
 /**
- * MainViewModel — top-level ViewModel for MainActivity.
- *
- * Owns:
- *   - auth      (TDLib authorization state machine)
- *   - chatRepo  (chat list loader)
- *   - mediaRepo (per-chat media loader)
- *   - fileRepo  (download manager for chat photos + media files)
- *
- * Exposes StateFlows the Compose tree collects.
+ * Top-level ViewModel for MainActivity. Owns auth, chatRepo, mediaRepo,
+ * fileRepo. Exposes StateFlows the Compose tree collects.
  */
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -47,57 +40,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val archiveCount = chatRepo.archiveCount
     val viewingArchive = chatRepo.viewingArchive
 
-    /** Toggle the sidebar between main chat list and archived chat list. */
     fun setViewingArchive(value: Boolean) {
         chatRepo.setViewingArchive(value)
     }
 
-    // ── Sign-out transition ────────────────────────────────
-    // True from the moment realSignOut() is called until TDLib reaches
-    // WaitQrCode (or hits an error). QrLoginScreen uses this to suppress
-    // the "Disconnected / Connecting / Unlocking" intermediate states
-    // and show a single "Signing out..." message instead.
+    /** True during realSignOut() until TDLib reaches WaitQrCode/Error. */
     private val _signingOut = MutableStateFlow(false)
     val signingOut: StateFlow<Boolean> = _signingOut.asStateFlow()
 
-    // Decoupled from [signingOut] so SettingsScreen's slide-out animation
-    // can finish before AppRoot swaps the screen out. Lifecycle:
-    //   realSignOut()  → both flags = true → banner slides in (300ms)
-    //   auth → WaitQrCode → showSignOutBanner = false → banner slides out (250ms)
-    //   delay(350)   → signingOut = false → AppRoot finally swaps to QrLoginScreen
-    // The 350ms gap covers the 250ms exit tween + 100ms buffer so the
-    // banner is fully gone before SettingsScreen is unmounted.
+    /**
+     * Decoupled from signingOut so the banner slide-out tween (250ms)
+     * finishes before AppRoot swaps the screen. The 350ms gap covers
+     * the 250ms tween + 100ms buffer.
+     */
     private val _showSignOutBanner = MutableStateFlow(false)
     val showSignOutBanner: StateFlow<Boolean> = _showSignOutBanner.asStateFlow()
 
-    // ── Sign-in transition ──────────────────────────────
-    // True while the user has scanned the QR and TDLib is processing
-    // the auth. Used by AppRoot to render the "Signing in…" Message
-    // overlay above QrLoginScreen.
-    //
-    // Set true on the WaitQrCode → non-WaitQrCode transition (user
-    // scanned). Cleared on Ready (after a 500ms delay so the Message
-    // exit tween can play before AppRoot swaps to HomeScreen) or Error
-    // (immediately, so the user sees the inline error message).
-    //
-    // The 500ms delay is longer than the sign-out 350ms because TDLib
-    // commonly jumps WaitQrCode → Ready with no visible intermediate
-    // state, so without the hold the Message would slide in and
-    // immediately slide out without ever being readable.
+    /**
+     * Hold for 500ms after Ready so the "Signing in…" overlay's exit tween
+     * (250ms) can play before AppRoot swaps to HomeScreen. Longer than
+     * sign-out 350ms because WaitQrCode → Ready is typically a single
+     * transition with no visible intermediate state.
+     */
     private val _signingIn = MutableStateFlow(false)
     val signingIn: StateFlow<Boolean> = _signingIn.asStateFlow()
 
     val searchQuery = chatRepo.searchQuery
     val searchSearching = chatRepo.searching
 
-    // ── TDLib file cache (D-031) ─────────────────────────────────
-    // The TDLib cache directory is not wiped on sign-out (only the DB is).
-    // Users trigger an explicit cleanup via Settings → "清理缓存", which
-    // calls [clearCache] below. [cacheClearProgress] mirrors TdClient's
-    // StateFlow: null = idle, 0..1 = in progress, 1 = finished.
-    // [cacheSizeBytes] is the on-disk footprint of the cache dir,
-    // refreshed by [refreshCacheSize] (called on SettingsScreen mount
-    // and after a successful cleanup).
+    /** D-031. Cache cleanup is explicit user action (Settings → 清理缓存),
+     *  not part of realSignOut. null = idle, 0..1 = in progress, 1 = finished. */
     val cacheClearProgress: StateFlow<Float?> = TdClient.cacheClearProgress
     private val _cacheSizeBytes = MutableStateFlow(0L)
     val cacheSizeBytes: StateFlow<Long> = _cacheSizeBytes.asStateFlow()
@@ -127,17 +99,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val mediaExhausted = mediaRepo.exhausted
     val currentChatId = mediaRepo.currentChatId
 
-    // title cache: chatId -> title (populated when ChatListScreen fetches them)
+    // title cache: chatId -> title
     private val _chatTitles = MutableStateFlow<Map<Long, String>>(emptyMap())
     val chatTitles: StateFlow<Map<Long, String>> = _chatTitles.asStateFlow()
 
     private val _currentChatTitle = MutableStateFlow<String?>(null)
     val currentChatTitle: StateFlow<String?> = _currentChatTitle.asStateFlow()
 
-    // ── Player state (v0.7.0) ──────────────────────────────────────
-    // Index into mediaItems of the video currently being played in
-    // the dedicated PlayerScreen. null = not in player. Photos don't
-    // open the player — they stay in FullScreenMedia.
+    /** Index of the video in mediaItems currently in PlayerScreen. null = not playing. Photos don't open the player. */
     private val _playerMediaIndex = MutableStateFlow<Int?>(null)
     val playerMediaIndex: StateFlow<Int?> = _playerMediaIndex.asStateFlow()
 
@@ -149,25 +118,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _playerResumePositions = MutableStateFlow<Map<Int, Long>>(emptyMap())
     val playerResumePositions: StateFlow<Map<Int, Long>> = _playerResumePositions.asStateFlow()
 
-    // ── Nav rail state (v0.8.0) ──────────────────────────────────
-    // Which top-level section is currently visible. Search / Chats / Settings.
-    // NavRail order is Search -> Chats -> Settings, but Chats is the primary
-    // action so it gets initial focus.
     enum class NavSection { Search, Chats, Settings }
 
     private val _navSection = MutableStateFlow(NavSection.Chats)
     val navSection: StateFlow<NavSection> = _navSection.asStateFlow()
 
-    // Which chat is currently selected in the Chats module's left sidebar.
-    // null = no chat selected (right pane shows placeholder).
-    // Separate from mediaRepo.currentChatId (which is the deep chat the
-    // media grid is loading); sidebar selection is the user-facing pick.
+    /** null = no chat selected. Separate from mediaRepo.currentChatId (sidebar selection vs deep chat). */
     private val _sidebarSelectedChatId = MutableStateFlow<Long?>(null)
     val sidebarSelectedChatId: StateFlow<Long?> = _sidebarSelectedChatId.asStateFlow()
 
-    // ── Settings state (v0.8.0) ───────────────────────────────
-    // Stored in SharedPreferences. v0.8.0 keeps both as in-memory StateFlow
-    // mirrors; persistence is handled by [SettingsRepository].
+    /** In-memory mirrors; persistence handled by SettingsRepository. */
     private val _themeMode = MutableStateFlow(ThemeMode.Dark)
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
@@ -201,9 +161,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         SettingsRepository.setLanguage(getApplication(), lang)
     }
 
-    /** Logout: clear TDLib session + nav back to login. v0.8.0 just clears
-     *  sidebar selection and player index; the auth state going non-Ready
-     *  is what routes us back to QrLoginScreen. */
+    /** Pre-D-031 logout. Kept for backward compat; the auth state going non-Ready is what routes us back to QrLoginScreen. */
     fun logout() {
         closeChat()
         closePlayer()
@@ -212,13 +170,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         auth.cancelQrLogin()
     }
 
-    /** v1.0.0 real sign-out: stop TDLib, wipe on-disk state, restart fresh,
-     *  request a fresh QR login. [TdClient.realSignOut] handles the wipe
-     *  + restart atomically so the database/files dirs are only deleted
-     *  when the user explicitly signs out — NOT on every app start
-     *  (D-029 replaces v0.9's `startWithPaths` wipe, which used to
-     *  force a re-login on every launch).
-     */
+    /** v1.0.0 real sign-out. [TdClient.realSignOut] wipes DB only (not file cache — D-031). */
     fun realSignOut() {
         closeChat()
         closePlayer()
@@ -234,11 +186,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             databaseDirectory = java.io.File(app.filesDir, "tdlib").absolutePath,
             filesDirectory = java.io.File(app.filesDir, "tdlib-files").absolutePath,
         )
-        // QR is now driven by TdAuth.handleAuthState when TDLib reaches
-        // WaitPhoneNumber — no need to fire it eagerly here. The previous
-        // immediate-call path (D-029) raced against TDLib's startup state
-        // machine and the request landed in WaitTdlibParameters where it
-        // was silently dropped.
     }
 
     /** v0.9.0: fetch the current TG user via TDLib getMe. */
@@ -249,17 +196,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Open the dedicated PlayerScreen for the video at [index] in [mediaItems]. */
     fun openPlayer(index: Int) {
         _playerMediaIndex.value = index
     }
 
-    /** Close the PlayerScreen and release the index handle. */
     fun closePlayer() {
         _playerMediaIndex.value = null
     }
 
-    /** Step the player to another media item (direction ±1). */
     fun stepPlayer(delta: Int) {
         val cur = _playerMediaIndex.value ?: return
         _playerMediaIndex.value = cur + delta
@@ -277,14 +221,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return next
     }
 
-    /** Save the current play position for the given fileId (ms). */
     fun savePlayerPosition(fileId: Int, positionMs: Long) {
         if (positionMs <= 0L) return
         _playerResumePositions.value =
             _playerResumePositions.value + (fileId to positionMs)
     }
 
-    /** Clear resume position (e.g. user watched to the end). */
     fun clearPlayerPosition(fileId: Int) {
         _playerResumePositions.value = _playerResumePositions.value - fileId
     }
@@ -302,9 +244,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _currentChatTitle.value = id?.let { _chatTitles.value[it] }
             }
         }
-        // (QR is not booted eagerly here — TdAuth.handleAuthState fires
-        //  RequestQrCodeAuthentication when TDLib transitions into
-        //  WaitPhoneNumber, which is the only valid state for the call.)
         // Hydrate settings from SharedPreferences
         val (theme, lang) = SettingsRepository.hydrate(getApplication())
         _themeMode.value = theme
@@ -316,11 +255,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (st is AuthState.Ready) refreshMe()
             }
         }
-        // Clear the signingOut flag once TDLib reaches WaitQrCode (or Error)
-        // so QrLoginScreen stops suppressing intermediate states.
-        // We also flip [showSignOutBanner] first so SettingsScreen's
-        // top-banner slide-out animation has time to play before AppRoot
-        // swaps the screen out — see [_showSignOutBanner] for the timing.
+        // After WaitQrCode/Error, clear banner then delay 350ms before
+        // clearing signingOut (lets banner tween finish).
         viewModelScope.launch {
             auth.state.collect { st ->
                 if (st is AuthState.WaitQrCode || st is AuthState.Error) {
@@ -331,26 +267,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-        // Detect the sign-in transition (user scans the QR) and drive
-        // [signingIn] so AppRoot can show the "Signing in…" Message
-        // overlay. The hold on Ready gives the Message's exit tween
-        // (250ms) enough time to play before AppRoot swaps to HomeScreen.
+        // Drive signingIn so AppRoot can show the "Signing in…" Message
+        // overlay above QrLoginScreen. The 500ms hold on Ready gives the
+        // Message exit tween time to play before HomeScreen swaps in.
         viewModelScope.launch {
             var prev: AuthState? = null
             auth.state.collect { st ->
-                // WaitQrCode → anything else means the user scanned.
                 if (prev is AuthState.WaitQrCode && st !is AuthState.WaitQrCode) {
                     _signingIn.value = true
                 }
-                // Login complete → hold the overlay for 500ms then hide.
                 if (st is AuthState.Ready && _signingIn.value) {
                     viewModelScope.launch {
                         delay(500)
                         _signingIn.value = false
                     }
                 }
-                // Login failed → hide immediately so the inline error is
-                // unobstructed.
                 if (st is AuthState.Error) {
                     _signingIn.value = false
                 }
