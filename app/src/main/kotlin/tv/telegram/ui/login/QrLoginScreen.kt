@@ -3,6 +3,7 @@
 package tv.telegram.ui.login
 
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +42,21 @@ import tv.telegram.ui.MainViewModel
 import androidx.tv.material3.Text
 import androidx.tv.material3.MaterialTheme
 
+private const val TAG = "QrLoginScreen"
+
+/** Render [AuthState] as a single-line label for logcat. Keeps log lines
+ *  short and avoids leaking token material into logs. */
+private fun AuthState.label(): String = when (this) {
+    AuthState.Idle -> "Idle"
+    AuthState.WaitTdlibParams -> "WaitTdlibParams"
+    AuthState.WaitEncryptionKey -> "WaitEncryptionKey"
+    is AuthState.WaitQrCode -> "WaitQrCode(linkLen=${link.length}, alreadyLoggedIn=$alreadyLoggedIn)"
+    AuthState.LoggingIn -> "LoggingIn"
+    AuthState.Ready -> "Ready"
+    is AuthState.Error -> "Error(\"$message\")"
+    AuthState.Closed -> "Closed"
+}
+
 /**
  * QrLoginScreen — entry screen.
  *
@@ -62,13 +78,32 @@ fun QrLoginScreen(viewModel: MainViewModel) {
     var lastQrLink by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(authState) {
         val st = authState  // local val — can't smart-cast delegated property
+        val prevLen = lastQrLink?.length  // capture for log diff
         when (st) {
-            is AuthState.WaitQrCode -> lastQrLink = st.link
-            // Clear the cache after sign-out so the next startup
-            // doesn't briefly show the previous session's (now invalid)
-            // QR before the new one renders.
-            AuthState.Closed -> lastQrLink = null
-            else -> Unit
+            is AuthState.WaitQrCode -> {
+                lastQrLink = st.link
+                Log.d(TAG, "[effect] authState=${st.label()} → lastQrLink set (prevLen=${prevLen ?: "null"}, newLen=${st.link.length})")
+            }
+            // Clear the cache at the unambiguous start of a fresh
+            // bootstrap. WaitTdlibParams is the first state TDLib emits
+            // for every session — it's the only state where we can be
+            // certain "a new WaitQrCode is coming". Closed is NOT in
+            // this list because it's semantically ambiguous: it covers
+            // sign-out, remote kick, AND mid-login session reset, and
+            // clearing there races with the brief WaitQrCode-after-
+            // Close window that TDLib sometimes emits. By waiting for
+            // WaitTdlibParams we let any in-flight WaitQrCode render
+            // finish naturally before wiping. Ready is NOT in this
+            // list because the natural login path (WaitQrCode → Ready)
+            // should leave the cache intact until QrLoginScreen
+            // unmounts via `remember` disposal.
+            AuthState.WaitTdlibParams -> {
+                lastQrLink = null
+                Log.d(TAG, "[effect] authState=${st.label()} → lastQrLink cleared (prevLen=${prevLen ?: "null"}, reason=bootstrap-start)")
+            }
+            else -> {
+                Log.d(TAG, "[effect] authState=${st.label()} → lastQrLink unchanged (len=${prevLen ?: "null"})")
+            }
         }
     }
 
@@ -83,6 +118,7 @@ fun QrLoginScreen(viewModel: MainViewModel) {
         // and show a single "Signing out..." message. As soon as TDLib
         // emits WaitQrCode the flag clears and the QR renders directly.
         if (signingOut && authState !is AuthState.WaitQrCode && authState !is AuthState.Error) {
+            Log.d(TAG, "[render] signingOut=true authState=${authState.label()} → StatusMessage('Signing out…')")
             StatusMessage(
                 title = stringResource(R.string.app_name),
                 subtitle = "Signing out…",
@@ -92,14 +128,20 @@ fun QrLoginScreen(viewModel: MainViewModel) {
             // different copy. These ARE allowed to break the QR layout
             // because the user needs the specific message (error reason,
             // disconnect instructions, "signed in").
-            is AuthState.Error -> StatusMessage(
-                title = stringResource(R.string.app_name),
-                subtitle = stringResource(R.string.login_failed, s.message),
-            )
-            AuthState.Closed -> StatusMessage(
-                title = stringResource(R.string.app_name),
-                subtitle = "Disconnected from Telegram. Restart the app to sign in again.",
-            )
+            is AuthState.Error -> {
+                Log.d(TAG, "[render] branch=Error authState=${s.label()} → StatusMessage('Login failed: ${s.message}')")
+                StatusMessage(
+                    title = stringResource(R.string.app_name),
+                    subtitle = stringResource(R.string.login_failed, s.message),
+                )
+            }
+            AuthState.Closed -> {
+                Log.d(TAG, "[render] branch=Closed → StatusMessage('Disconnected')")
+                StatusMessage(
+                    title = stringResource(R.string.app_name),
+                    subtitle = "Disconnected from Telegram. Restart the app to sign in again.",
+                )
+            }
 
             // Default: QR layout for every transient state. Avoids
             // layout swaps when TDLib internally re-emits WaitTdlibParams
@@ -111,17 +153,24 @@ fun QrLoginScreen(viewModel: MainViewModel) {
             // post-scan transient states, and an empty "[ QR ]"
             // placeholder during initial startup before WaitQrCode is
             // reached.
-            is AuthState.WaitQrCode -> QrContent(
-                title = stringResource(R.string.login_title),
-                subtitle = stringResource(R.string.login_subtitle),
-                qrLink = s.link,
-                alreadyLoggedIn = s.alreadyLoggedIn,
-            )
-            else -> QrContent(
-                title = stringResource(R.string.login_title),
-                subtitle = stringResource(R.string.login_subtitle),
-                qrLink = lastQrLink ?: "",
-            )
+            is AuthState.WaitQrCode -> {
+                Log.d(TAG, "[render] branch=WaitQrCode linkLen=${s.link.length} alreadyLoggedIn=${s.alreadyLoggedIn} cachedLastQrLinkLen=${lastQrLink?.length ?: "null"} → QrContent")
+                QrContent(
+                    title = stringResource(R.string.login_title),
+                    subtitle = stringResource(R.string.login_subtitle),
+                    qrLink = s.link,
+                    alreadyLoggedIn = s.alreadyLoggedIn,
+                )
+            }
+            else -> {
+                val effective = lastQrLink ?: ""
+                Log.d(TAG, "[render] branch=else authState=${s.label()} effectiveQrLinkLen=${effective.length} lastQrLinkLen=${lastQrLink?.length ?: "null"} → QrContent")
+                QrContent(
+                    title = stringResource(R.string.login_title),
+                    subtitle = stringResource(R.string.login_subtitle),
+                    qrLink = effective,
+                )
+            }
         }
     }
 }
@@ -180,6 +229,7 @@ private fun QrContent(
                 contentScale = ContentScale.Fit,
             )
         } else {
+            Log.w(TAG, "[QrContent] rendering [ QR ] placeholder (encodeQr returned null for qrLinkLen=${qrLink.length}, empty=${qrLink.isEmpty()})")
             Box(
                 modifier = Modifier.size(360.dp).background(Color.White),
                 contentAlignment = Alignment.Center,
@@ -236,5 +286,6 @@ private fun encodeQr(content: String): Bitmap? = try {
         setPixels(pixels, 0, w, 0, 0, w, h)
     }
 } catch (e: Throwable) {
+    Log.w(TAG, "[encodeQr] failed (contentLen=${content.length}, empty=${content.isEmpty()}, type=${e.javaClass.simpleName}: ${e.message})")
     null
 }
