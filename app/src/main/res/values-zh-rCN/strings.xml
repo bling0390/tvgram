@@ -64,6 +64,14 @@
     <string name="settings_signout">退出登录</string>
     <string name="settings_signout_value">退出当前 Telegram 账户</string>
     <string name="settings_signout_confirm">再按一次 OK 确认</string>
+    <string name="settings_clear_cache">清理缓存</string>
+    <string name="settings_clear_cache_dialog_title">清理缓存？</string>
+    <string name="settings_clear_cache_dialog_text">将删除 %1$s 的本地媒体缓存（不影响消息历史,下次访问时自动重新下载）。</string>
+    <string name="settings_clear_cache_dialog_confirm">清理</string>
+    <string name="settings_clear_cache_dialog_cancel">取消</string>
+    <string name="settings_clear_cache_progress">清理中 %1$d%%</string>
+    <string name="settings_clear_cache_done">已清理 %1$s 缓存。</string>
+    <string name="settings_clear_cache_dialog_done_button">完成</string>
     <string name="signing_out">正在退出登录…</string>
     <string name="signing_in">正在登录…</string>
     <string name="settings_language_english">English</string>

@@ -65,12 +65,20 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val user by viewModel.currentUser.collectAsStateWithLifecycle()
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
+    // D-031: cache row + confirm dialog state. cacheSizeBytes is refreshed
+    // on mount (LaunchedEffect below) and after a successful cleanup.
+    val cacheSizeBytes by viewModel.cacheSizeBytes.collectAsStateWithLifecycle()
+    val cacheClearProgress by viewModel.cacheClearProgress.collectAsStateWithLifecycle()
 
     var showAbout by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var showClearCacheConfirm by remember { mutableStateOf(false) }
 
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(signingOut) { if (!signingOut) firstFocus.requestFocus() }
+    // Refresh cache size when the screen mounts. The walk is fast (< 1s
+    // even on 50 GB) but we run it on Dispatchers.IO inside the VM.
+    LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
     Box(
         modifier = Modifier
@@ -126,6 +134,13 @@ fun SettingsScreen(viewModel: MainViewModel) {
                 }
                 item {
                     SettingsRow(
+                        title = stringResource(R.string.settings_clear_cache),
+                        value = formatCacheSize(cacheSizeBytes),
+                        onClick = { showClearCacheConfirm = true },
+                    )
+                }
+                item {
+                    SettingsRow(
                         title = stringResource(R.string.settings_signout),
                         value = stringResource(R.string.settings_signout_value),
                         onClick = { showLogoutConfirm = true },
@@ -162,6 +177,58 @@ fun SettingsScreen(viewModel: MainViewModel) {
             dismissButton = {
                 TextButton(onClick = { showLogoutConfirm = false }) {
                     Text(stringResource(R.string.settings_signout_dialog_cancel))
+                }
+            },
+        )
+    }
+
+    // D-031: clear cache confirm dialog. Three states driven by
+    // [cacheClearProgress]:
+    //   - null  → idle: show size + confirm/cancel
+    //   - 0..1  → in progress: show %, no buttons, dismiss disabled
+    //   - 1     → done: show "Done" button + refresh size on dismiss
+    if (showClearCacheConfirm) {
+        val progress = cacheClearProgress
+        val isProgressing = progress != null && progress < 1f
+        val isDone = progress == 1f
+        val sizeText = formatCacheSize(cacheSizeBytes)
+        AlertDialog(
+            onDismissRequest = { if (!isProgressing) showClearCacheConfirm = false },
+            title = { Text(stringResource(R.string.settings_clear_cache_dialog_title)) },
+            text = {
+                when {
+                    isProgressing -> Text(
+                        stringResource(
+                            R.string.settings_clear_cache_progress,
+                            (progress!! * 100).toInt(),
+                        ),
+                    )
+                    isDone -> Text(stringResource(R.string.settings_clear_cache_done, sizeText))
+                    else -> Text(stringResource(R.string.settings_clear_cache_dialog_text, sizeText))
+                }
+            },
+            confirmButton = {
+                when {
+                    isProgressing -> Unit  // no button during cleanup
+                    isDone -> TextButton(onClick = {
+                        showClearCacheConfirm = false
+                        viewModel.resetCacheClearProgress()
+                        viewModel.refreshCacheSize()
+                    }) {
+                        Text(stringResource(R.string.settings_clear_cache_dialog_done_button))
+                    }
+                    else -> TextButton(onClick = {
+                        viewModel.clearCache()
+                    }) {
+                        Text(stringResource(R.string.settings_clear_cache_dialog_confirm))
+                    }
+                }
+            },
+            dismissButton = {
+                if (!isProgressing) {
+                    TextButton(onClick = { showClearCacheConfirm = false }) {
+                        Text(stringResource(R.string.settings_clear_cache_dialog_cancel))
+                    }
                 }
             },
         )
@@ -213,6 +280,19 @@ private fun ThemeMode.next(): ThemeMode = when (this) {
     ThemeMode.Dark -> ThemeMode.Light
     ThemeMode.Light -> ThemeMode.System
     ThemeMode.System -> ThemeMode.Dark
+}
+
+/**
+ * Format a byte count for the cache row. IEC binary (KiB=1024) but
+ * labeled KB/MB/GB to match what users expect from OS file managers.
+ * Kept private to SettingsScreen — it's UI copy and tied to the
+ * locale conventions chosen here.
+ */
+private fun formatCacheSize(bytes: Long): String = when {
+    bytes < 1024L -> "$bytes B"
+    bytes < 1024L * 1024 -> "%.1f KB".format(bytes / 1024.0)
+    bytes < 1024L * 1024 * 1024 -> "%.1f MB".format(bytes / 1024.0 / 1024.0)
+    else -> "%.2f GB".format(bytes / 1024.0 / 1024.0 / 1024.0)
 }
 
 @Composable

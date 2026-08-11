@@ -73,6 +73,14 @@
     <string name="settings_signout_dialog_text">This will delete all local data and require scanning a new QR code to sign back in.</string>
     <string name="settings_signout_dialog_cancel">Cancel</string>
     <string name="settings_signout_dialog_confirm">Sign out</string>
+    <string name="settings_clear_cache">Clear cache</string>
+    <string name="settings_clear_cache_dialog_title">Clear cache?</string>
+    <string name="settings_clear_cache_dialog_text">This will delete %1$s of cached media. Message history is not affected — files will be re-downloaded on demand next time.</string>
+    <string name="settings_clear_cache_dialog_confirm">Clear</string>
+    <string name="settings_clear_cache_dialog_cancel">Cancel</string>
+    <string name="settings_clear_cache_progress">Clearing… %1$d%%</string>
+    <string name="settings_clear_cache_done">Cleared %1$s of cache.</string>
+    <string name="settings_clear_cache_dialog_done_button">Done</string>
     <string name="signing_out">Signing out…</string>
     <string name="signing_in">Signing in…</string>
     <string name="settings_language_english">English</string>

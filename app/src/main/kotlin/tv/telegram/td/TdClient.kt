@@ -5,11 +5,16 @@ import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.drinkless.td.libcore.telegram.Client
 import org.drinkless.td.libcore.telegram.TdApi
@@ -51,6 +56,21 @@ object TdClient {
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
     val updates: SharedFlow<TdApi.Object> = _updates.asSharedFlow()
+
+    /**
+     * Cache-cleanup progress broadcaster. D-031:
+     *   - null   = idle (no cleanup ever ran, or last cleanup was reset)
+     *   - 0..1   = in progress (fraction of files deleted)
+     *   - 1f     = finished (UI should call [resetCacheClearProgress] to
+     *              dismiss its progress indicator and put the screen back
+     *              to the idle state)
+     *
+     * Surged into SharedFlow territory would be misleading — we only
+     * have one current value at a time and need collectAsStateWithLifecycle
+     * semantics, so StateFlow is the right shape.
+     */
+    private val _cacheClearProgress = MutableStateFlow<Float?>(null)
+    val cacheClearProgress: StateFlow<Float?> = _cacheClearProgress.asStateFlow()
 
     private var client: Client? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -243,13 +263,20 @@ object TdClient {
     }
 
     /**
-     * Real sign-out: stop TDLib, wipe persistent state, restart fresh.
+     * Real sign-out: stop TDLib, wipe DB, restart fresh.
+     *
+     * D-031: only the database directory is wiped (auth keys, secret
+     * chat keys, drafts, contacts cache — everything that ties the local
+     * install to the account). The file cache directory is left intact;
+     * TDLib re-validates cached files on next login by file_id and
+     * re-downloads stale ones. Cache eviction is a separate, explicit
+     * user action — see [clearCache].
      *
      * The wipe happens here (NOT in [startWithPaths]) so a normal app
      * launch preserves the existing login session — see D-029.
      *
      * @return true if the existing client was stopped + restarted, false
-     *         if there was no client and we only wiped state.
+     *         if there was no client and we only wiped DB.
      */
     fun realSignOut(
         context: Context,
@@ -260,30 +287,112 @@ object TdClient {
     ): Boolean {
         val c = client
         if (c == null) {
-            Log.w(TAG, "realSignOut() called but no TDLib client; just wiping state")
-            wipeState(databaseDirectory, filesDirectory)
+            Log.w(TAG, "realSignOut() called but no TDLib client; just wiping DB")
+            wipeDatabase(databaseDirectory)
             return false
         }
-        Log.i(TAG, "Real sign-out: stop + wipe + restart")
+        Log.i(TAG, "Real sign-out: stop + wipe DB + restart")
         stop()
-        wipeState(databaseDirectory, filesDirectory)
+        wipeDatabase(databaseDirectory)
         startWithPaths(context, apiId, apiHash, databaseDirectory, filesDirectory)
         return true
     }
 
-    private fun wipeState(databaseDirectory: String, filesDirectory: String) {
+    /**
+     * Wipe only the TDLib database directory. The file cache is left
+     * intact — see D-031.
+     */
+    private fun wipeDatabase(databaseDirectory: String) {
         runCatching {
             val dbDir = File(databaseDirectory)
             if (dbDir.exists()) {
                 val deleted = dbDir.deleteRecursively()
                 Log.i(TAG, "Wiped TDLib database: $deleted (path=$databaseDirectory)")
             }
-            val filesDir = File(filesDirectory)
-            if (filesDir.exists()) {
-                val deleted = filesDir.deleteRecursively()
-                Log.i(TAG, "Wiped TDLib files: $deleted (path=$filesDirectory)")
+        }.onFailure { Log.w(TAG, "Failed to wipe TDLib DB", it) }
+    }
+
+    /**
+     * Clear TDLib's file cache directory. Used by Settings → "清理缓存",
+     * NOT by [realSignOut]. Runs async on Dispatchers.IO and reports
+     * progress via [cacheClearProgress] (null = idle, 0..1 = in progress).
+     *
+     * The caller MUST have already stopped TDLib via [stop] (or [realSignOut])
+     * before invoking this — otherwise TDLib may still be writing into the
+     * directory mid-delete and we'll race against it.
+     *
+     * Walks the tree and deletes files one at a time (not deleteRecursively)
+     * so we can report meaningful progress to a TV UI that may otherwise
+     * sit on a frozen spinner for 30s+ on a fully populated cache.
+     *
+     * @return the launched Job. Cancel to abort the cleanup.
+     */
+    fun clearCache(filesDirectory: String): Job = scope.launch(Dispatchers.IO) {
+        _cacheClearProgress.value = 0f
+        try {
+            val dir = File(filesDirectory)
+            if (!dir.exists()) {
+                Log.i(TAG, "clearCache: dir does not exist ($filesDirectory), nothing to do")
+                _cacheClearProgress.value = 1f
+                return@launch
             }
-        }.onFailure { Log.w(TAG, "Failed to wipe TDLib state", it) }
+            // Collect first, then delete — mutating the tree while walking
+            // it is a classic ConcurrentModificationException hazard.
+            val files = dir.walkTopDown().filter { it.isFile }.toList()
+            val total = files.size
+            if (total == 0) {
+                Log.i(TAG, "clearCache: empty cache ($filesDirectory)")
+                _cacheClearProgress.value = 1f
+                return@launch
+            }
+            Log.i(TAG, "clearCache: deleting $total files from $filesDirectory")
+            files.forEachIndexed { i, f ->
+                runCatching { f.delete() }.onFailure {
+                    Log.w(TAG, "clearCache: failed to delete ${f.absolutePath}", it)
+                }
+                // Throttle progress updates — every 200 files, or on the last
+                // one. 200 is empirically small enough that the UI feels
+                // responsive but large enough not to flood the main
+                // dispatcher with StateFlow emissions.
+                if (i % 200 == 0 || i == total - 1) {
+                    _cacheClearProgress.value = (i + 1).toFloat() / total
+                }
+            }
+            // The empty subdirectories themselves are harmless and TDLib
+            // will recreate them on next login, but delete them anyway for
+            // tidiness.
+            runCatching { dir.deleteRecursively() }
+            Log.i(TAG, "clearCache: done")
+        } catch (e: Throwable) {
+            Log.w(TAG, "clearCache: failed", e)
+        } finally {
+            // Always end in the "done" state so the UI can dismiss its
+            // progress indicator — even on partial failure, we want to
+            // surface that cleanup ran (rather than staying stuck at 0
+            // forever).
+            _cacheClearProgress.value = 1f
+        }
+    }
+
+    /**
+     * Walk the cache directory and sum file sizes. Synchronous; intended
+     * to be called from a background dispatcher by the UI layer (e.g. when
+     * the Settings screen mounts). Returns 0 if the directory doesn't exist.
+     */
+    fun cacheSize(filesDirectory: String): Long {
+        val dir = File(filesDirectory)
+        if (!dir.exists()) return 0L
+        return runCatching { dir.walkTopDown().filter { it.isFile }.sumOf { it.length() } }
+            .onFailure { Log.w(TAG, "cacheSize: walk failed", it) }
+            .getOrDefault(0L)
+    }
+
+    /**
+     * Reset [cacheClearProgress] back to null (idle). Call after the UI
+     * has acknowledged the "done" state and dismissed its progress UI.
+     */
+    fun resetCacheClearProgress() {
+        _cacheClearProgress.value = null
     }
 
     /**

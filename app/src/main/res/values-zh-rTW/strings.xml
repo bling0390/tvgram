@@ -64,6 +64,14 @@
     <string name="settings_signout">登出</string>
     <string name="settings_signout_value">登出目前的 Telegram 帳戶</string>
     <string name="settings_signout_confirm">再按一次 OK 確認</string>
+    <string name="settings_clear_cache">清除快取</string>
+    <string name="settings_clear_cache_dialog_title">清除快取？</string>
+    <string name="settings_clear_cache_dialog_text">將刪除 %1$s 的本機媒體快取（不影響訊息歷史,下次存取時自動重新下載）。</string>
+    <string name="settings_clear_cache_dialog_confirm">清除</string>
+    <string name="settings_clear_cache_dialog_cancel">取消</string>
+    <string name="settings_clear_cache_progress">清除中 %1$d%%</string>
+    <string name="settings_clear_cache_done">已清除 %1$s 快取。</string>
+    <string name="settings_clear_cache_dialog_done_button">完成</string>
     <string name="signing_out">正在退出登入…</string>
     <string name="signing_in">正在登入…</string>
     <string name="settings_language_english">English</string>

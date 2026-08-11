@@ -3,6 +3,7 @@ package tv.telegram.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -88,6 +89,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val searchQuery = chatRepo.searchQuery
     val searchSearching = chatRepo.searching
+
+    // ── TDLib file cache (D-031) ─────────────────────────────────
+    // The TDLib cache directory is not wiped on sign-out (only the DB is).
+    // Users trigger an explicit cleanup via Settings → "清理缓存", which
+    // calls [clearCache] below. [cacheClearProgress] mirrors TdClient's
+    // StateFlow: null = idle, 0..1 = in progress, 1 = finished.
+    // [cacheSizeBytes] is the on-disk footprint of the cache dir,
+    // refreshed by [refreshCacheSize] (called on SettingsScreen mount
+    // and after a successful cleanup).
+    val cacheClearProgress: StateFlow<Float?> = TdClient.cacheClearProgress
+    private val _cacheSizeBytes = MutableStateFlow(0L)
+    val cacheSizeBytes: StateFlow<Long> = _cacheSizeBytes.asStateFlow()
+
+    fun refreshCacheSize() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<TgTvApp>()
+            val dir = java.io.File(app.filesDir, "tdlib-files")
+            _cacheSizeBytes.value = TdClient.cacheSize(dir.absolutePath)
+        }
+    }
+
+    fun clearCache() {
+        val app = getApplication<TgTvApp>()
+        val dir = java.io.File(app.filesDir, "tdlib-files")
+        TdClient.clearCache(dir.absolutePath)
+    }
+
+    fun resetCacheClearProgress() {
+        TdClient.resetCacheClearProgress()
+    }
 
     val mediaItems = mediaRepo.items
     val mediaLoaded = mediaRepo.loaded
