@@ -197,6 +197,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
 
+    // Navigation Compose (D-032) — see NavHost usage in MainActivity.kt
+    implementation(libs.androidx.navigation.compose)
+
     // Compose (BOM-aligned)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
