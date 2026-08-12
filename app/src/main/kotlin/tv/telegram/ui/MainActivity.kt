@@ -48,6 +48,7 @@ import tv.telegram.ui.login.QrLoginScreen
 import tv.telegram.ui.player.PlayerScreen
 import tv.telegram.ui.search.SearchScreen
 import tv.telegram.ui.settings.SettingsScreen
+import tv.telegram.ui.nav.Routes
 import tv.telegram.ui.theme.TvgramTheme
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
@@ -79,13 +80,13 @@ private fun AppNavHost(viewModel: MainViewModel) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val inHome = currentRoute?.startsWith("home") == true
+    val inHome = currentRoute?.startsWith(Routes.HOME) == true
 
     LaunchedEffect(authState, signingIn) {
         val target = when {
-            signingIn -> "qrLogin"
-            authState is AuthState.Ready -> "home"
-            else -> "qrLogin"
+            signingIn -> Routes.QR_LOGIN
+            authState is AuthState.Ready -> Routes.HOME
+            else -> Routes.QR_LOGIN
         }
         val current = navController.currentDestination?.route
         if (current != target) {
@@ -98,9 +99,9 @@ private fun AppNavHost(viewModel: MainViewModel) {
         }
     }
 
-    BackHandler(enabled = currentRoute == "home/search" || currentRoute == "home/settings") {
-        navController.navigate("home/chats") {
-            popUpTo("home") { saveState = true }
+    BackHandler(enabled = currentRoute == Routes.HOME_SEARCH || currentRoute == Routes.HOME_SETTINGS) {
+        navController.navigate(Routes.HOME_CHATS) {
+            popUpTo(Routes.HOME) { saveState = true }
             launchSingleTop = true
             restoreState = true
         }
@@ -109,37 +110,37 @@ private fun AppNavHost(viewModel: MainViewModel) {
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
-            startDestination = if (authState is AuthState.Ready) "home" else "qrLogin",
+            startDestination = if (authState is AuthState.Ready) Routes.HOME else Routes.QR_LOGIN,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = if (inHome) 96.dp else 0.dp),
         ) {
-            composable("qrLogin") { QrLoginScreen(viewModel = viewModel) }
+            composable(Routes.QR_LOGIN) { QrLoginScreen(viewModel = viewModel) }
 
-            navigation(startDestination = "home/chats", route = "home") {
-                composable("home/search") {
+            navigation(startDestination = Routes.HOME_CHATS, route = Routes.HOME) {
+                composable(Routes.HOME_SEARCH) {
                     SearchScreen(
                         viewModel = viewModel,
                         onOpenChats = {
-                            navController.navigate("home/chats") {
-                                popUpTo("home") { saveState = true }
+                            navController.navigate(Routes.HOME_CHATS) {
+                                popUpTo(Routes.HOME) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
                             }
                         },
                     )
                 }
-                composable("home/chats") {
+                composable(Routes.HOME_CHATS) {
                     ChatsScreen(
                         viewModel = viewModel,
-                        onOpenPlayer = { index -> navController.navigate("player/$index") },
+                        onOpenPlayer = { index -> navController.navigate(Routes.player(index)) },
                     )
                 }
-                composable("home/settings") { SettingsScreen(viewModel = viewModel) }
+                composable(Routes.HOME_SETTINGS) { SettingsScreen(viewModel = viewModel) }
             }
 
             composable(
-                route = "player/{index}",
+                route = Routes.PLAYER,
                 arguments = listOf(navArgument("index") { type = NavType.IntType }),
             ) { entry ->
                 val index = entry.arguments?.getInt("index") ?: 0
@@ -148,8 +149,8 @@ private fun AppNavHost(viewModel: MainViewModel) {
                     index = index,
                     onClose = { navController.popBackStack() },
                     onNavigateTo = { newIndex ->
-                        navController.navigate("player/$newIndex") {
-                            popUpTo("player/{index}") { inclusive = true }
+                        navController.navigate(Routes.player(newIndex)) {
+                            popUpTo(Routes.PLAYER) { inclusive = true }
                             launchSingleTop = true
                         }
                     },
@@ -162,7 +163,7 @@ private fun AppNavHost(viewModel: MainViewModel) {
                 current = currentRoute,
                 onSelect = { route ->
                     navController.navigate(route) {
-                        popUpTo("home") { saveState = true }
+                        popUpTo(Routes.HOME) { saveState = true }
                         launchSingleTop = true
                         restoreState = true
                     }
@@ -190,9 +191,9 @@ private fun NavRail(
     modifier: Modifier = Modifier,
 ) {
     val entries = listOf(
-        NavEntry("home/search", stringResource(R.string.nav_search)),
-        NavEntry("home/chats", stringResource(R.string.nav_chats)),
-        NavEntry("home/settings", stringResource(R.string.nav_settings)),
+        NavEntry(Routes.HOME_SEARCH, stringResource(R.string.nav_search)),
+        NavEntry(Routes.HOME_CHATS, stringResource(R.string.nav_chats)),
+        NavEntry(Routes.HOME_SETTINGS, stringResource(R.string.nav_settings)),
     )
 
     val railFocus = remember { FocusRequester() }
