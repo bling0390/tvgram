@@ -42,6 +42,9 @@ class TdChatRepository(
     private val _loaded = MutableStateFlow(false)
     val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     init {
         scope.launch {
             client.updates.collect { obj -> dispatchUpdate(obj) }
@@ -74,6 +77,7 @@ class TdChatRepository(
             return
         }
         Log.i(TAG, "loadAllChats: requesting top $limit chats")
+        _error.value = null
 
         client.send(TdApi.LoadChats(TdApi.ChatListMain(), limit))
 
@@ -82,7 +86,13 @@ class TdChatRepository(
             timeoutMs = 10_000L,
         )
         if (chatsObj !is TdApi.Chats) {
-            Log.w(TAG, "getChats returned ${chatsObj?.javaClass?.simpleName ?: "null"}")
+            val msg = when {
+                chatsObj == null -> "Loading timed out. Press OK to retry."
+                chatsObj is TdApi.Error -> "${chatsObj.code}: ${chatsObj.message}"
+                else -> "Unexpected response: ${chatsObj.javaClass.simpleName}"
+            }
+            Log.w(TAG, "getChats failed: $msg")
+            _error.value = msg
             return
         }
         val ids = chatsObj.chatIds

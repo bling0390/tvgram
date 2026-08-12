@@ -24,7 +24,10 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -52,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.widget.Toast
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -79,16 +83,27 @@ fun ChatsScreen(
     val viewingArchive by viewModel.viewingArchive.collectAsStateWithLifecycle()
     val archiveCount by viewModel.archiveCount.collectAsStateWithLifecycle()
     val loaded by viewModel.chatListLoaded.collectAsStateWithLifecycle()
+    val chatListError by viewModel.chatListError.collectAsStateWithLifecycle()
     val selectedChatId by viewModel.sidebarSelectedChatId.collectAsStateWithLifecycle()
     val mediaItems by viewModel.mediaItems.collectAsStateWithLifecycle()
     val mediaLoaded by viewModel.mediaLoaded.collectAsStateWithLifecycle()
     val currentChatTitle by viewModel.currentChatTitle.collectAsStateWithLifecycle()
+
+    // Toast 即时提醒：聊天列表加载失败时弹一次
+    val context = LocalContext.current
+    LaunchedEffect(chatListError) {
+        if (chatListError != null) {
+            Toast.makeText(context, chatListError, Toast.LENGTH_LONG).show()
+        }
+    }
 
     Row(modifier = Modifier.fillMaxSize()) {
 
         ChatSidebar(
             chats = if (viewingArchive) archiveChats else chats,
             loaded = loaded,
+            error = chatListError,
+            onRetry = { viewModel.retryLoadChats() },
             selectedChatId = selectedChatId,
             archiveCount = archiveCount,
             viewingArchive = viewingArchive,
@@ -129,6 +144,8 @@ fun ChatsScreen(
 private fun ChatSidebar(
     chats: List<ChatItem>,
     loaded: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
     selectedChatId: Long?,
     archiveCount: Int,
     viewingArchive: Boolean,
@@ -161,6 +178,13 @@ private fun ChatSidebar(
             fontSize = 12.sp,
         )
         Spacer(Modifier.height(12.dp))
+        if (error != null) {
+            ChatListError(
+                error = error,
+                onRetry = onRetry,
+            )
+            return@Column
+        }
         if (!loaded) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -200,6 +224,40 @@ private fun ChatSidebar(
 
                     fr = if (chat.id == chats.firstOrNull()?.id && viewingArchive.not() && archiveCount == 0) firstFocus else null,
                     viewModel = viewModel,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatListError(
+    error: String,
+    onRetry: () -> Unit,
+) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = "Error",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(48.dp),
+            )
+            Card(
+                onClick = onRetry,
+                colors = CardDefaults.colors(
+                    containerColor = Color(0xFF2A2A2A),
+                    focusedContainerColor = MaterialTheme.colorScheme.secondary,
+                ),
+            ) {
+                Text(
+                    text = "Retry",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                 )
             }
         }

@@ -39,9 +39,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val authState: StateFlow<AuthState> = auth.state
     val chatList = chatRepo.items
     val chatListLoaded = chatRepo.loaded
+    val chatListError = chatRepo.error
     val archiveChats = chatRepo.archiveChats
     val archiveCount = chatRepo.archiveCount
     val viewingArchive = chatRepo.viewingArchive
+
+    fun retryLoadChats() {
+        viewModelScope.launch {
+            chatRepo.loadAllChats()
+            chatRepo.loadArchiveChats()
+        }
+    }
 
     fun setViewingArchive(value: Boolean) {
         chatRepo.setViewingArchive(value)
