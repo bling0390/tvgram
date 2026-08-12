@@ -825,3 +825,47 @@ D-033 rationale):
   branch was dead code: `realSignOut()` closes the player first).
 - Section state is kept via Compose saveable state, not by nesting
   NavHost sub-graphs — less machinery, same user-visible result.
+
+---
+
+## D-034 · Sections into NavHost sub-graph; drop AppRoot when-branches · 2026-08-12
+
+**Decision:** Two follow-ups to D-033:
+
+1. **Search / Chats / Settings move into a `navigation` sub-graph**
+   (`route = "home"`, startDestination `home/chats`). NavRail is now a
+   floating overlay rendered by AppNavHost, its selection derived from
+   `currentDestination.route` (not ViewModel state). Section switches
+   use the official tab pattern — `navigate(route) { popUpTo("home")
+   { saveState = true }; launchSingleTop = true; restoreState = true }`
+   — so grid scroll / photo fullscreen / search buffer survive via the
+   back stack entry's SavedStateHandle. `MainViewModel.navSection` and
+   `HomeScreen`'s `SaveableStateHolder` are deleted.
+
+2. **AppRoot's `when` branches removed.** signingOut/signingIn are NOT
+   destinations — they are transient overlay windows. AppNavHost now
+   owns everything: auth routing via `LaunchedEffect(authState,
+   signingIn)` (holds on `qrLogin` while `signingIn` so the
+   "Signing in…" tween plays before home swaps in), and the
+   `Message` overlays sit above NavHost. Sign-out routes straight to
+   the login screen ("Signing out…" shown by QrLoginScreen) instead of
+   pretending to stay on Home. `showSignOutBanner` (top-banner) is
+   deleted — the QR screen's own signingOut state covers it.
+
+**Why:**
+- D-033 left two navigation paradigms: NavHost for auth/player, a
+  `when` + ViewModel state for sections. One NavHost for everything
+  removes the dual source of truth and gives sections back-stack
+  semantics (Back from Settings → Chats instead of exiting the app).
+- AppRoot's when-branches bypassed NavHost, destroying the
+  NavController on every sign-out; keeping NavHost mounted makes the
+  controller persistent.
+
+**Trade-offs accepted:**
+- Sign-out now jumps straight to the QR/login screen (previously it
+  kept Home visible during the ~1s TDLib settle). This is the desired
+  UX change; QrLoginScreen renders "Signing out…" in that window.
+- NavRail is an overlay with a 96dp left padding on NavHost content;
+  qrLogin/player stay full-screen (no rail).
+- Back on `home/search` / `home/settings` is intercepted to return to
+  `home/chats`; Back on `home/chats` exits (start destination).

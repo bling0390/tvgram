@@ -44,7 +44,10 @@ import tv.telegram.ui.MainViewModel
 import kotlinx.coroutines.delay
 
 @Composable
-fun SearchScreen(viewModel: MainViewModel) {
+fun SearchScreen(
+    viewModel: MainViewModel,
+    onOpenChats: () -> Unit,
+) {
     val chats by viewModel.chatList.collectAsStateWithLifecycle()
     val loaded by viewModel.chatListLoaded.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -128,7 +131,7 @@ fun SearchScreen(viewModel: MainViewModel) {
                         items = results,
                         onSelect = { id ->
                             viewModel.selectSidebarChat(id)
-                            viewModel.selectNavSection(MainViewModel.NavSection.Chats)
+                            onOpenChats()
                         },
                     )
                 }

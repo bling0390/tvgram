@@ -43,9 +43,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _signingOut = MutableStateFlow(false)
     val signingOut: StateFlow<Boolean> = _signingOut.asStateFlow()
 
-    private val _showSignOutBanner = MutableStateFlow(false)
-    val showSignOutBanner: StateFlow<Boolean> = _showSignOutBanner.asStateFlow()
-
     private val _signingIn = MutableStateFlow(false)
     val signingIn: StateFlow<Boolean> = _signingIn.asStateFlow()
 
@@ -93,11 +90,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _playerResumePositions = MutableStateFlow<Map<Int, Long>>(emptyMap())
     val playerResumePositions: StateFlow<Map<Int, Long>> = _playerResumePositions.asStateFlow()
 
-    enum class NavSection { Search, Chats, Settings }
-
-    private val _navSection = MutableStateFlow(NavSection.Chats)
-    val navSection: StateFlow<NavSection> = _navSection.asStateFlow()
-
     private val _sidebarSelectedChatId = MutableStateFlow<Long?>(null)
     val sidebarSelectedChatId: StateFlow<Long?> = _sidebarSelectedChatId.asStateFlow()
 
@@ -109,10 +101,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _currentUser = MutableStateFlow<TdUser?>(null)
     val currentUser: StateFlow<TdUser?> = _currentUser.asStateFlow()
-
-    fun selectNavSection(section: NavSection) {
-        _navSection.value = section
-    }
 
     fun selectSidebarChat(chatId: Long?) {
         _sidebarSelectedChatId.value = chatId
@@ -144,7 +132,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         closeChat()
         _sidebarSelectedChatId.value = null
         _currentUser.value = null
-        _showSignOutBanner.value = true
         _signingOut.value = true
         val app = getApplication<TgTvApp>()
         TdClient.realSignOut(
@@ -226,8 +213,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             auth.state.collect { st ->
                 if (st is AuthState.WaitQrCode || st is AuthState.Error) {
-                    _showSignOutBanner.value = false
-                    delay(350)
                     _signingOut.value = false
                 }
             }
