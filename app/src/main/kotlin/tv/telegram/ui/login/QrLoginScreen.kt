@@ -48,7 +48,7 @@ private fun AuthState.label(): String = when (this) {
     AuthState.Idle -> "Idle"
     AuthState.WaitTdlibParams -> "WaitTdlibParams"
     AuthState.WaitEncryptionKey -> "WaitEncryptionKey"
-    is AuthState.WaitQrCode -> "WaitQrCode(linkLen=${link.length}, alreadyLoggedIn=$alreadyLoggedIn)"
+    is AuthState.WaitQrCode -> "WaitQrCode(linkLen=${link.length})"
     AuthState.LoggingIn -> "LoggingIn"
     AuthState.Ready -> "Ready"
     is AuthState.Error -> "Error(\"$message\")"
@@ -105,17 +105,16 @@ fun QrLoginScreen(viewModel: MainViewModel) {
                 Log.d(TAG, "[render] branch=Closed → StatusMessage('Disconnected')")
                 StatusMessage(
                     title = stringResource(R.string.app_name),
-                    subtitle = "Disconnected from Telegram. Restart the app to sign in again.",
+                    subtitle = "Disconnected from Telegram.",
                 )
             }
 
             is AuthState.WaitQrCode -> {
-                Log.d(TAG, "[render] branch=WaitQrCode linkLen=${s.link.length} alreadyLoggedIn=${s.alreadyLoggedIn} cachedLastQrLinkLen=${lastQrLink?.length ?: "null"} → QrContent")
+                Log.d(TAG, "[render] branch=WaitQrCode linkLen=${s.link.length} cachedLastQrLinkLen=${lastQrLink?.length ?: "null"} → QrContent")
                 QrContent(
                     title = stringResource(R.string.login_title),
                     subtitle = stringResource(R.string.login_subtitle),
                     qrLink = s.link,
-                    alreadyLoggedIn = s.alreadyLoggedIn,
                 )
             }
             else -> {
@@ -136,7 +135,6 @@ private fun QrContent(
     title: String,
     subtitle: String,
     qrLink: String,
-    alreadyLoggedIn: Boolean = false,
 ) {
     val qrBitmap = remember(qrLink) { encodeQr(qrLink) }
 

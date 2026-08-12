@@ -10,7 +10,6 @@ sealed class AuthState {
 
     data class WaitQrCode(
         val link: String,
-        val alreadyLoggedIn: Boolean = false,
     ) : AuthState()
 
     data object LoggingIn : AuthState()

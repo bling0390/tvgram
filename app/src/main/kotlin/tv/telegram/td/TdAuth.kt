@@ -19,15 +19,26 @@ class TdAuth(
     val state: StateFlow<AuthState> = _state.asStateFlow()
 
     @Volatile private var pendingQrRequest: Boolean = false
+    private var qrRequestAttempts = 0
 
     init {
 
         scope.launch {
             while (true) {
                 kotlinx.coroutines.delay(pendingQrTimeoutMs)
-                if (pendingQrRequest) {
-                    Log.w(TAG, "QR request pending for >${pendingQrTimeoutMs}ms; resetting guard")
+                if (!pendingQrRequest) {
+                    qrRequestAttempts = 0
+                    continue
+                }
+                qrRequestAttempts++
+                if (qrRequestAttempts > maxQrRequestAttempts) {
+                    Log.e(TAG, "QR request stuck after ${maxQrRequestAttempts}×${pendingQrTimeoutMs}ms; failing")
                     pendingQrRequest = false
+                    _state.value = AuthState.Error("QR login timed out")
+                    qrRequestAttempts = 0
+                } else {
+                    Log.w(TAG, "QR request pending >${pendingQrTimeoutMs}ms (attempt $qrRequestAttempts); re-requesting")
+                    requestQrCodeAuth()
                 }
             }
         }
@@ -69,7 +80,7 @@ class TdAuth(
                 pendingQrRequest = false
                 val link = authState.link
                 if (link.isNotEmpty()) {
-                    _state.value = AuthState.WaitQrCode(link, alreadyLoggedIn = false)
+                    _state.value = AuthState.WaitQrCode(link)
                 } else {
                     _state.value = AuthState.Error("QR login: empty link from TDLib")
                 }
@@ -89,9 +100,7 @@ class TdAuth(
             is TdApi.AuthorizationStateWaitPhoneNumber -> {
                 if (!pendingQrRequest) {
                     Log.i(TAG, "WaitPhoneNumber → sending RequestQrCodeAuthentication")
-                    pendingQrRequest = true
-                    client.send(TdApi.RequestQrCodeAuthentication())
-                    _state.value = AuthState.LoggingIn
+                    requestQrCodeAuth()
                 } else {
                     Log.i(TAG, "WaitPhoneNumber (pendingQr=true) → awaiting QR result")
 
@@ -99,26 +108,14 @@ class TdAuth(
             }
 
             is TdApi.AuthorizationStateWaitCode -> {
-                if (!pendingQrRequest) {
-                    Log.w(TAG, "WaitCode (no pending QR) — TDLib may have a stuck code query")
-                    pendingQrRequest = true
-                    client.send(TdApi.RequestQrCodeAuthentication())
-                    _state.value = AuthState.LoggingIn
-                } else {
-                    _state.value = AuthState.Error("Code login is not supported.")
-                }
+                pendingQrRequest = false
+                _state.value = AuthState.Error("Code login is not supported.")
             }
             is TdApi.AuthorizationStateWaitRegistration ->
                 _state.value = AuthState.Error("Registration is not supported.")
             is TdApi.AuthorizationStateWaitPassword -> {
-                if (!pendingQrRequest) {
-                    Log.w(TAG, "WaitPassword (no pending QR) — TDLib may be 2FA-protected")
-                    pendingQrRequest = true
-                    client.send(TdApi.RequestQrCodeAuthentication())
-                    _state.value = AuthState.LoggingIn
-                } else {
-                    _state.value = AuthState.Error("2FA password is not supported in this build.")
-                }
+                pendingQrRequest = false
+                _state.value = AuthState.Error("2FA password is not supported in this build.")
             }
         }
     }
@@ -136,17 +133,34 @@ class TdAuth(
     }
 
     fun requestQrLogin() {
-        pendingQrRequest = true
-        client.send(TdApi.RequestQrCodeAuthentication())
+        requestQrCodeAuth()
     }
 
     fun cancelQrLogin() {
-        client.send(TdApi.LogOut())
+        // TDLib only allows RequestQrCodeAuthentication from WaitPhoneNumber; sending
+        // LogOut() while unauthenticated dead-ends the client in Closed with no way
+        // back. Just drop the guard so the next state update can drive a fresh QR.
+        Log.i(TAG, "cancelQrLogin: resetting pending QR guard")
+        pendingQrRequest = false
+        qrRequestAttempts = 0
+    }
+
+    private fun requestQrCodeAuth() {
+        pendingQrRequest = true
+        _state.value = AuthState.LoggingIn
+        client.send(TdApi.RequestQrCodeAuthentication()) { result ->
+            if (result is TdApi.Error) {
+                Log.w(TAG, "RequestQrCodeAuthentication failed: ${result.code} ${result.message}")
+                pendingQrRequest = false
+                _state.value = AuthState.Error("QR login unavailable: ${result.message}")
+            }
+        }
     }
 
     companion object {
         private const val TAG = "TdAuth"
         private const val pendingQrTimeoutMs: Long = 30_000L
+        private const val maxQrRequestAttempts: Int = 3
     }
 }
 
