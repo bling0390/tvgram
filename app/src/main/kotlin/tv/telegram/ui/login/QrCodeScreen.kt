@@ -17,8 +17,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,7 +52,32 @@ import tv.telegram.ui.MainViewModel
 fun QrCodeScreen(viewModel: MainViewModel) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
 
-    val qrLink = (authState as? AuthState.WaitQrCode)?.link
+    // Last known-good QR link. Keeps the QR visible while the Ready event
+    // is still in flight (navigation is async), avoiding a loading flash
+    // right before switching to the home screen.
+    var lastQrLink by remember { mutableStateOf<String?>(null) }
+
+    val currentLink = (authState as? AuthState.WaitQrCode)?.link
+
+    LaunchedEffect(currentLink) {
+        if (!currentLink.isNullOrEmpty()) lastQrLink = currentLink
+    }
+    // Re-entering the login flow (e.g. fresh client after sign-out) means
+    // any previously shown QR is stale: drop it so the area shows loading.
+    LaunchedEffect(authState) {
+        if (authState is AuthState.WaitTdlibParams || authState is AuthState.WaitEncryptionKey) {
+            lastQrLink = null
+        }
+    }
+
+    // While Ready (about to be navigated away) keep showing the last QR;
+    // any other non-QR state (LoggingIn, bootstrap, etc.) shows loading.
+    val displayLink = when {
+        !currentLink.isNullOrEmpty() -> currentLink
+        authState is AuthState.Ready -> lastQrLink
+        else -> null
+    }
+
     val error = when (val st = authState) {
         is AuthState.Error -> st.message
         AuthState.Closed -> "Disconnected from Telegram."
@@ -59,7 +87,7 @@ fun QrCodeScreen(viewModel: MainViewModel) {
     QrContent(
         title = stringResource(R.string.login_title),
         subtitle = stringResource(R.string.login_subtitle),
-        qrLink = qrLink,
+        qrLink = displayLink,
         error = error,
     )
 }
@@ -106,26 +134,19 @@ private fun QrContent(
             modifier = Modifier.size(360.dp),
             contentAlignment = Alignment.Center,
         ) {
-            if (qrLink.isNullOrEmpty()) {
-                CircularProgressIndicator()
+            val qrBitmap = qrLink?.let { remember(it) { encodeQr(it) } }
+            if (qrBitmap != null) {
+                Image(
+                    bitmap = qrBitmap.asImageBitmap(),
+                    contentDescription = "Telegram login QR code",
+                    modifier = Modifier.size(360.dp),
+                    contentScale = ContentScale.Fit,
+                )
             } else {
-                val qrBitmap = remember(qrLink) { encodeQr(qrLink) }
-                if (qrBitmap != null) {
-                    Image(
-                        bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = "Telegram login QR code",
-                        modifier = Modifier.size(360.dp),
-                        contentScale = ContentScale.Fit,
-                    )
-                } else {
+                if (!qrLink.isNullOrEmpty()) {
                     Log.w(TAG, "encodeQr returned null for linkLen=${qrLink.length}")
-                    Box(
-                        modifier = Modifier.size(360.dp).background(Color.White),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("[ QR ]", color = Color.Black, fontSize = 28.sp)
-                    }
                 }
+                CircularProgressIndicator()
             }
         }
     }
