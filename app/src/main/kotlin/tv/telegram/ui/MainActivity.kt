@@ -266,19 +266,19 @@ private fun RailItem(
     fr: FocusRequester? = null,
 ) {
     val containerColor = when {
-        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
+        selected -> Color(0xFF2E3A48) // 比底色略亮的蓝灰胶囊背景（参照截图）
         else -> Color.Transparent
     }
     Card(
         onClick = onClick,
         colors = CardDefaults.colors(
             containerColor = containerColor,
-            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+            focusedContainerColor = Color(0xFF3A4A5C),
         ),
         shape = CardDefaults.shape(
-            RoundedCornerShape(14.dp),
-            RoundedCornerShape(14.dp),
-            RoundedCornerShape(14.dp),
+            RoundedCornerShape(50),
+            RoundedCornerShape(50),
+            RoundedCornerShape(50),
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -297,12 +297,12 @@ private fun RailItem(
                 modifier = Modifier
                     .size(28.dp)
                     .clip(CircleShape)
-                    .background(Color.White),
+                    .background(if (selected) Color(0xFF9BDCFE) else Color(0xFFB0B0B0)),
             )
             if (expanded) {
                 Text(
                     text = entry.label,
-                    color = if (selected) MaterialTheme.colorScheme.onBackground else Color(0xFFB0B0B0),
+                    color = if (selected) Color.White else Color(0xFFB0B0B0),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
