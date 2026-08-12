@@ -5,15 +5,6 @@ import android.util.Log
 import java.io.File
 import tv.telegram.td.TdClient
 
-/**
- * Application class.
- *
- * Bootstraps TDLib on startup (D-002, D-029). Single-user; login state
- * persists in filesDir/tdlib and filesDir/tdlib-files. On normal app
- * launches the database is NOT wiped — only [MainViewModel.realSignOut]
- * (via [TdClient.realSignOut]) deletes it (D-029 replaces the v0.9.0
- * behavior where every launch wiped state and forced a re-login).
- */
 class TgTvApp : Application() {
 
     override fun onCreate() {
@@ -42,10 +33,6 @@ class TgTvApp : Application() {
             filesDirectory    = tdlibFilesDir.absolutePath,
         )
 
-        // Wire up outbound proxy (TDLib ignores Android HTTP proxy).
-        // No-op when PROXY_HOST is blank in local.properties. Required
-        // for users behind a firewall (China, Iran, etc.).
-        // See TdClient.enableProxy docs for the 10.0.2.2 emulator quirk.
         TdClient.enableProxy(
             host     = BuildConfig.PROXY_HOST,
             port     = BuildConfig.PROXY_PORT,

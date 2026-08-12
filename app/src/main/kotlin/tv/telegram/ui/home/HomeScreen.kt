@@ -45,34 +45,6 @@ import tv.telegram.ui.settings.SettingsScreen
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
-/**
- * HomeScreen — the post-login root container (v0.8.0).
- *
- * Layout (SmartTube-style):
- *   ┌────────┬────────────────────────────────────────────┐
- *   │  Nav   │   section content                          │
- *   │  Rail  │   (Search | Chats | Settings)              │
- *   │ (80dp) │                                            │
- *   └────────┴────────────────────────────────────────────┘
- *
- * NavRail is a 80dp wide vertical column with 3 entries:
- *   🔍 Search
- *   💬 Chats
- *   ⚙ Settings
- *
- * The right pane is one of:
- *   - SearchScreen (full-page search, lifts v0.6's D-pad keyboard)
- *   - ChatsScreen  (sidebar with chat list + right media pane)
- *   - SettingsScreen (5 settings rows)
- *
- * D-pad on the rail: Up / Down cycles sections, OK jumps into the
- * section content (focus requester on the section's first focusable).
- *
- * D-033: each section is wrapped in a [SaveableStateProvider] keyed by
- * the section, so switching Search ↔ Chats ↔ Settings preserves the
- * section's internal saveable state (grid scroll position, photo
- * fullscreen, search buffer) instead of disposing it.
- */
 @Composable
 fun HomeScreen(
     viewModel: MainViewModel,
@@ -111,11 +83,11 @@ private fun NavRail(
 
     val railFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
-        withFrameNanos { }  // wait for first composition pass so Modifier.focusRequester() is attached
+        withFrameNanos { }
         try {
             railFocus.requestFocus()
         } catch (e: IllegalStateException) {
-            // benign race during navigation — FocusRequester detached before our effect ran
+
         }
     }
 

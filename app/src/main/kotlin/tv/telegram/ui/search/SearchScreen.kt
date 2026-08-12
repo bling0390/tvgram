@@ -43,28 +43,6 @@ import tv.telegram.td.ChatItem
 import tv.telegram.ui.MainViewModel
 import kotlinx.coroutines.delay
 
-/**
- * SearchScreen — full-page global search (v0.8.0).
- *
- * Lifted from v0.6's ChatListScreen. Layout:
- *   ┌────────────────────────────────────────────────────────────┐
- *   │  🔍  Search chats..._                            searching…  │
- *   ├────────────────────────────────────────────────────────────┤
- *   │  4-col grid of matching chat cards (or "No matches" empty) │
- *   │                                                            │
- *   │  When the D-pad keyboard is open, an overlay appears:       │
- *   │                                                            │
- *   │       A B C D E                                            │
- *   │       F G H I J                                            │
- *   │       K L M N O                                            │
- *   │       P Q R S T                                            │
- *   │       U V W X Y Z                                          │
- *   │       Z ⌫ CLR SEARCH CLOSE                                 │
- *   └────────────────────────────────────────────────────────────┘
- *
- * First-focus lands on the search bar; OK opens the keyboard; typing
- * a letter debounces 250ms then calls viewModel.setSearchQuery().
- */
 @Composable
 fun SearchScreen(viewModel: MainViewModel) {
     val chats by viewModel.chatList.collectAsStateWithLifecycle()
@@ -72,10 +50,6 @@ fun SearchScreen(viewModel: MainViewModel) {
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val searchSearching by viewModel.searchSearching.collectAsStateWithLifecycle()
 
-    // editBuffer is what the user is typing; searchQuery is the
-    // debounced, viewModel-side source of truth that drives the filter.
-    // rememberSaveable (D-033): survives section switches via the
-    // SaveableStateHolder in HomeScreen.
     var editBuffer by rememberSaveable { mutableStateOf("") }
     var keyboardOpen by rememberSaveable { mutableStateOf(false) }
 
@@ -259,8 +233,6 @@ private fun ResultCard(chat: ChatItem, onClick: () -> Unit) {
     }
 }
 
-// ── D-pad keyboard (lifted from ChatListScreen v0.6) ─────────────────
-
 @Composable
 private fun DpadKeyboard(
     onChar: (Char) -> Unit,
@@ -283,7 +255,7 @@ private fun DpadKeyboard(
         contentAlignment = Alignment.Center,
     ) {
         Card(
-            onClick = { /* swallow backdrop clicks */ },
+            onClick = {  },
             modifier = Modifier.fillMaxWidth(0.8f).height(380.dp),
             colors = CardDefaults.colors(containerColor = Color(0xFF1E1E1E)),
         ) {

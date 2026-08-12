@@ -44,10 +44,6 @@ import androidx.tv.material3.Text
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 
-/**
- * SettingsScreen. 6 rows: account info, language, theme, about, clear
- * cache (D-031), sign out. Each taps into a confirm dialog or cycle.
- */
 @Composable
 fun SettingsScreen(viewModel: MainViewModel) {
     val ctx = LocalContext.current
@@ -72,8 +68,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        // Settings list + about dialog stay rendered during sign-out so
-        // the user can still see which page they clicked.
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -91,7 +86,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                     SettingsRow(
                         title = stringResource(R.string.settings_account),
                         value = accountValue(authState, user),
-                        onClick = { /* read-only */ },
+                        onClick = {  },
                         fr = firstFocus,
                     )
                 }
@@ -158,8 +153,6 @@ fun SettingsScreen(viewModel: MainViewModel) {
         )
     }
 
-    // D-031: clear cache confirm dialog. Three states driven by
-    // [cacheClearProgress]: null = idle, 0..1 = in progress, 1 = done.
     if (showClearCacheConfirm) {
         val progress = cacheClearProgress
         val isProgressing = progress != null && progress < 1f
@@ -182,7 +175,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
             },
             confirmButton = {
                 when {
-                    isProgressing -> Unit  // no button during cleanup
+                    isProgressing -> Unit
                     isDone -> TextButton(onClick = {
                         showClearCacheConfirm = false
                         viewModel.resetCacheClearProgress()
@@ -207,7 +200,6 @@ fun SettingsScreen(viewModel: MainViewModel) {
         )
     }
 }
-
 
 @Composable
 private fun accountValue(authState: AuthState, user: TdUser?): String =
@@ -255,7 +247,6 @@ private fun ThemeMode.next(): ThemeMode = when (this) {
     ThemeMode.System -> ThemeMode.Dark
 }
 
-/** Format bytes as KB/MB/GB (binary 1024-based, decimal labels). */
 private fun formatCacheSize(bytes: Long): String = when {
     bytes < 1024L -> "$bytes B"
     bytes < 1024L * 1024 -> "%.1f KB".format(bytes / 1024.0)

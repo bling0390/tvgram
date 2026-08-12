@@ -13,14 +13,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.drinkless.td.libcore.telegram.TdApi
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * FileDownloadState — what we know about a remote file.
- *
- *   - Remote    : we know the file_id but haven't asked TDLib yet
- *   - Pending   : asked, waiting for file object
- *   - Local     : downloaded, we have a local file.path
- *   - Failed    : download or getFile error
- */
 sealed class FileDownloadState {
     data object Remote : FileDownloadState()
     data class Pending(val expectedSize: Int = 0) : FileDownloadState()
@@ -28,20 +20,6 @@ sealed class FileDownloadState {
     data class Failed(val reason: String) : FileDownloadState()
 }
 
-/**
- * TdFileRepository — drives file downloads (chat photos, media thumbs,
- * full media files).
- *
- * TDLib flow:
- *   getFile(fileId)            → file object (or fileEmpty)
- *   file object .local.path    → already downloaded
- *   file object .local.is_downloading_completed = false
- *                              → use downloadFile(fileId, priority, offset, limit, synchronous)
- *                                with synchronous = false; TDLib will send updateFile updates
- *   When updateFile .local.is_downloading_completed = true → mark Local
- *
- * v1.0.0 (D-029): migrated from JSON RPC to typed [TdApi] objects.
- */
 class TdFileRepository(
     private val client: TdClient = TdClient,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
@@ -50,7 +28,6 @@ class TdFileRepository(
     private val _states = MutableStateFlow<Map<Int, FileDownloadState>>(emptyMap())
     val states: StateFlow<Map<Int, FileDownloadState>> = _states.asStateFlow()
 
-    // Outstanding downloads: fileId -> deferred that completes when is_downloading_completed=true
     private val pendingDownloads = ConcurrentHashMap<Int, CompletableDeferred<String>>()
 
     init {
@@ -62,7 +39,7 @@ class TdFileRepository(
     private fun dispatch(obj: TdApi.Object) {
         when (obj) {
             is TdApi.UpdateFile -> handleUpdateFile(obj.file)
-            else -> { /* ignore */ }
+            else -> {  }
         }
     }
 
@@ -76,17 +53,12 @@ class TdFileRepository(
         }
     }
 
-    /**
-     * Trigger download of a TDLib file and await completion.
-     * Returns local path, or null on timeout / failure.
-     */
     suspend fun ensureLocal(fileId: Int, priority: Int = 32, timeoutMs: Long = 60_000L): String? {
         val current = _states.value[fileId]
         if (current is FileDownloadState.Local) return current.path
 
         _states.value = _states.value + (fileId to FileDownloadState.Pending())
 
-        // getFile first to materialize the File object on TDLib's side
         val fileObj = client.execute(TdApi.GetFile(fileId), timeoutMs = 5_000L)
         if (fileObj !is TdApi.File) {
             Log.w(TAG, "ensureLocal($fileId): getFile returned ${fileObj?.javaClass?.simpleName ?: "null"}")
@@ -99,7 +71,6 @@ class TdFileRepository(
             return local.path
         }
 
-        // Kick off the download
         val deferred = CompletableDeferred<String>()
         pendingDownloads[fileId] = deferred
         client.send(TdApi.DownloadFile(fileId, priority, 0, 0, false))

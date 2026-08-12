@@ -44,7 +44,6 @@ import androidx.tv.material3.MaterialTheme
 
 private const val TAG = "QrLoginScreen"
 
-/** One-line label for logcat — avoids leaking token material. */
 private fun AuthState.label(): String = when (this) {
     AuthState.Idle -> "Idle"
     AuthState.WaitTdlibParams -> "WaitTdlibParams"
@@ -56,33 +55,21 @@ private fun AuthState.label(): String = when (this) {
     AuthState.Closed -> "Closed"
 }
 
-/**
- * QrLoginScreen. Renders the QR from [AuthState.WaitQrCode] (encoded
- * as `tg://login?token=...`); on [AuthState.Ready] the app moves to home.
- */
 @Composable
 fun QrLoginScreen(viewModel: MainViewModel) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
     val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
 
-    // Cache the most recent WaitQrCode link so the brief LoggingIn
-    // state after the user scans can keep rendering the same QrContent
-    // layout — no layout swap, no spinner, no "Connecting…" flash.
     var lastQrLink by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(authState) {
-        val st = authState  // local val — can't smart-cast delegated property
-        val prevLen = lastQrLink?.length  // capture for log diff
+        val st = authState
+        val prevLen = lastQrLink?.length
         when (st) {
             is AuthState.WaitQrCode -> {
                 lastQrLink = st.link
                 Log.d(TAG, "[effect] authState=${st.label()} → lastQrLink set (prevLen=${prevLen ?: "null"}, newLen=${st.link.length})")
             }
-            // Clear at WaitTdlibParams, not Closed: WaitTdlibParams is
-            // the first state of every fresh bootstrap, so it's the
-            // only unambiguous "a new WaitQrCode is coming" signal.
-            // Closed races with the brief WaitQrCode-after-Close window
-            // TDLib sometimes emits — clearing there would wipe an
-            // in-flight new QR before the user can scan it.
+
             AuthState.WaitTdlibParams -> {
                 lastQrLink = null
                 Log.d(TAG, "[effect] authState=${st.label()} → lastQrLink cleared (prevLen=${prevLen ?: "null"}, reason=bootstrap-start)")
@@ -99,9 +86,7 @@ fun QrLoginScreen(viewModel: MainViewModel) {
             .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center,
     ) {
-        // During sign-out: keep the QR layout (WaitingQrCode / Error render
-        // the right message below). For every other transient state, drop
-        // the QR content and show a single "Signing out…" message.
+
         if (signingOut && authState !is AuthState.WaitQrCode && authState !is AuthState.Error) {
             Log.d(TAG, "[render] signingOut=true authState=${authState.label()} → StatusMessage('Signing out…')")
             StatusMessage(
@@ -124,10 +109,6 @@ fun QrLoginScreen(viewModel: MainViewModel) {
                 )
             }
 
-            // Default: QR layout for every transient state. Avoids
-            // layout swaps when TDLib re-emits WaitTdlibParams or
-            // WaitEncryptionKey between WaitQrCode and Ready (which would
-            // otherwise flash "Connecting to Telegram…" / "Unlocking…").
             is AuthState.WaitQrCode -> {
                 Log.d(TAG, "[render] branch=WaitQrCode linkLen=${s.link.length} alreadyLoggedIn=${s.alreadyLoggedIn} cachedLastQrLinkLen=${lastQrLink?.length ?: "null"} → QrContent")
                 QrContent(
@@ -159,8 +140,6 @@ private fun QrContent(
 ) {
     val qrBitmap = remember(qrLink) { encodeQr(qrLink) }
 
-    // Side-by-side: copy on the left, QR on the right. Fills the 16:9
-    // TV screen — no big black void around the QR.
     Row(
         modifier = Modifier.fillMaxSize().padding(48.dp),
         horizontalArrangement = Arrangement.spacedBy(48.dp),
@@ -184,8 +163,6 @@ private fun QrContent(
             )
         }
 
-        // Display 360×360 at native 360dp so the QR modules + quiet zone
-        // keep their 1:1 ratio (no DPI scaling artifacts).
         if (qrBitmap != null) {
             Image(
                 bitmap = qrBitmap.asImageBitmap(),
@@ -223,12 +200,8 @@ private fun StatusMessage(title: String, subtitle: String) {
     }
 }
 
-/** Encode a string as a 360×360 QR code Bitmap. Null on encode failure. */
 private fun encodeQr(content: String): Bitmap? = try {
-    // Quiet zone overridden to 2 modules (zxing default 4) — packed
-    // tighter visually but BELOW the ISO/IEC 18004 minimum of 4, so
-    // some scanners may reject. Module size scales from 6 to 7 px
-    // (360 / (45+4) = 7), which partially compensates.
+
     val hints = mapOf<EncodeHintType, Any>(
         EncodeHintType.MARGIN to 2,
     )

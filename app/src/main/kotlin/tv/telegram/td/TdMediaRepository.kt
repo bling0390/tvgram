@@ -10,22 +10,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.drinkless.td.libcore.telegram.TdApi
 
-/**
- * TdMediaRepository — load image/video messages for a chat.
- *
- * Flow:
- *   1. User picks a chat (chatId) from ChatListScreen
- *   2. We call openAndLoad(chatId), then getChatHistory(chatId, fromMessageId, offset, limit)
- *   3. For each message, check if it has .content.photo / .content.video / .content.animation
- *   4. If yes, project to MediaItem and append
- *   5. Continue paginating on demand via loadMore()
- *
- * v0.5.0: pagination. Page size = 100 messages. loadMore() fetches the next
- * older page using `from_message_id = <oldest_seen_id>`. Stops when
- * the server returns fewer than `limit` messages, or the response is empty.
- *
- * v1.0.0 (D-029): migrated from JSON RPC to typed [TdApi] objects.
- */
 class TdMediaRepository(
     private val client: TdClient = TdClient,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
@@ -58,9 +42,8 @@ class TdMediaRepository(
     private fun dispatch(obj: TdApi.Object) {
         when (obj) {
             is TdApi.UpdateNewMessage -> handleNewMessage(obj.message)
-            // UpdateMessageContent only gives chatId + messageId + newContent
-            // (no full Message). Skipping; UI re-fetches on chat re-open.
-            else -> { /* ignore */ }
+
+            else -> {  }
         }
     }
 
@@ -72,9 +55,6 @@ class TdMediaRepository(
         }
     }
 
-    /**
-     * Open a chat and load its most recent page of media. Resets state for a new chat.
-     */
     suspend fun openAndLoad(chatId: Long, limit: Int = 100) {
         Log.i(TAG, "openAndLoad(chatId=$chatId, limit=$limit)")
         _currentChatId.value = chatId
@@ -83,7 +63,6 @@ class TdMediaRepository(
         _exhausted.value = false
         _error.value = null
 
-        // openChat — let TDLib know we're actively viewing it
         client.send(TdApi.OpenChat(chatId))
 
         val resp = client.execute(
@@ -113,9 +92,6 @@ class TdMediaRepository(
         }
     }
 
-    /**
-     * Fetch the next page of older messages and append media items.
-     */
     suspend fun loadMore(limit: Int = 100) {
         if (_loadingMore.value) {
             Log.d(TAG, "loadMore: already in flight")

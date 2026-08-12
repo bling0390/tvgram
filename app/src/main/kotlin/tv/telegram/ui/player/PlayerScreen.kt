@@ -64,29 +64,6 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
-/**
- * PlayerScreen — dedicated video player route (v0.7.0).
- *
- * Difference from FullScreenMedia in ChatScreen:
- *   - Photos are NOT handled here; the grid's FullScreenMedia still owns
- *     those. Photos won't trigger openPlayer().
- *   - Compose-native [PlayerSurface] (replaces the legacy PlayerView), so
- *     D-pad focus and Compose overlays integrate cleanly.
- *   - D-pad controller:
- *       ← / →       seek -10s / +10s   (or prev/next video if at edge)
- *       Up / Down   volume up / down    (v0.7.0 stub: no-op; v0.7.1 wires audio focus)
- *       OK / Center toggle play / pause
- *       Back        close (or release control overlay)
- *       Long OK / MenuButton cycle playback speed (1.0 → 1.25 → 1.5 → 2.0)
- *   - Auto-play next: when the current video ends, advance to the next
- *     Video item in [mediaItems] (skipping photos). Stops at the end of
- *     the chat's media list.
- *   - Resume from saved position (per fileId, in-memory for v0.7.0).
- *
- * D-033: the player is a NavHost route "player/{index}"; the index is a
- * nav ARGUMENT (not ViewModel state). Close / prev / next are plain
- * callbacks that drive navController directly — no StateFlow second-guessing.
- */
 @Composable
 fun PlayerScreen(
     viewModel: MainViewModel,
@@ -100,15 +77,13 @@ fun PlayerScreen(
     val resumeMap by viewModel.playerResumePositions.collectAsStateWithLifecycle()
 
     if (index !in mediaItems.indices) {
-        // Defensive: nothing to play (e.g. process death restored a stale
-        // route, or the chat was closed under us). Bounce back to grid.
+
         LaunchedEffect(Unit) { onClose() }
         return
     }
 
     val current = mediaItems[index]
 
-    // Build a sub-list of "video" indices so prev/next skips photos.
     val videoIndices = remember(mediaItems) {
         mediaItems.mapIndexedNotNull { i, m -> if (m.type == MediaType.Video) i else null }
     }
@@ -116,10 +91,8 @@ fun PlayerScreen(
     val hasPrevVideo = posInVideos > 0
     val hasNextVideo = posInVideos in 0 until videoIndices.lastIndex
 
-    /** Absolute index of the next/previous video in mediaItems, or null. */
     fun neighborVideo(delta: Int): Int? = videoIndices.getOrNull(posInVideos + delta)
 
-    // Pre-download the current video file (TdFileRepository caches by fileId).
     val currentFileState = viewModel.fileStateFor(current.fileId)
     val currentPath = (currentFileState as? FileDownloadState.Local)?.path
     LaunchedEffect(current.fileId) {
@@ -128,7 +101,6 @@ fun PlayerScreen(
         }
     }
 
-    // Build the ExoPlayer. New instance on fileId change.
     val exo = remember(current.fileId) {
         ExoPlayer.Builder(context).build().apply {
             playWhenReady = true
@@ -138,7 +110,6 @@ fun PlayerScreen(
         onDispose { exo.release() }
     }
 
-    // Set media item when path is ready, and seek to resume position once.
     var mediaPrepared by remember(current.fileId) { mutableStateOf(false) }
     LaunchedEffect(currentPath, current.fileId) {
         if (currentPath != null && !mediaPrepared) {
@@ -152,12 +123,10 @@ fun PlayerScreen(
         }
     }
 
-    // Sync speed from ViewModel.
     LaunchedEffect(speed) {
         exo.setPlaybackSpeed(speed)
     }
 
-    // Periodic position save (every 2s while playing).
     LaunchedEffect(exo, current.fileId) {
         while (true) {
             delay(2000L)
@@ -167,7 +136,6 @@ fun PlayerScreen(
         }
     }
 
-    // Auto-advance to the next video on ENDED.
     LaunchedEffect(exo) {
         exo.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
@@ -184,10 +152,8 @@ fun PlayerScreen(
         })
     }
 
-    // BackHandler: close player (pops the route).
     BackHandler(enabled = true) { onClose() }
 
-    // Focus requester so D-pad events land here first.
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         withFrameNanos { }
@@ -195,7 +161,6 @@ fun PlayerScreen(
         catch (_: IllegalStateException) {}
     }
 
-    // Controller overlay visibility (auto-hide after 4s of inactivity).
     var showController by remember { mutableStateOf(true) }
     var lastInteractionMs by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(showController) {
@@ -211,8 +176,6 @@ fun PlayerScreen(
         lastInteractionMs = System.currentTimeMillis()
     }
 
-    // Presentation state from media3-ui-compose (drives buffering, video size).
-    // Kept for future use in the controller overlay (v0.7.1+).
     @Suppress("UNUSED_VARIABLE")
     val presentation = rememberPresentationState(exo)
 
@@ -275,7 +238,6 @@ fun PlayerScreen(
             )
         }
 
-        // Subtle top hint (always visible)
         Text(
             text = stringResource(R.string.player_key_hint, speed),
             color = Color.White.copy(alpha = 0.45f),
@@ -285,7 +247,6 @@ fun PlayerScreen(
                 .padding(top = 16.dp),
         )
 
-        // Bottom controller overlay (auto-hide)
         AnimatedVisibility(
             visible = showController,
             enter = fadeIn(),
@@ -356,7 +317,7 @@ private fun PlayerController(
             .background(Color.Black.copy(alpha = 0.55f))
             .padding(horizontal = 24.dp, vertical = 16.dp),
     ) {
-        // Progress bar (visual only for v0.7.0; clickable to seek would be v0.7.1).
+
         ProgressBar(positionMs = pos, durationMs = dur)
         Spacer(Modifier.size(12.dp))
 

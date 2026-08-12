@@ -10,22 +10,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.drinkless.td.libcore.telegram.TdApi
 
-/**
- * TdChatRepository — drives the chat list.
- *
- * Flow:
- *   1. Wait for AuthState.Ready
- *   2. Call loadAllChats() — sends loadChats + getChats
- *   3. The getChats response is a [TdApi.Chats] object with chat IDs.
- *   4. For each chatId, send getChat, project to ChatItem.
- *
- * Triggered by:
- *   - authorizationStateReady
- *   - updateChatList
- *   - updateNewChat
- *
- * v1.0.0 (D-029): migrated from JSON RPC to typed [TdApi] objects.
- */
 class TdChatRepository(
     private val client: TdClient = TdClient,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
@@ -36,16 +20,12 @@ class TdChatRepository(
 
     private val _allChats = MutableStateFlow<List<ChatItem>>(emptyList())
 
-    // Archive list — populated alongside _allChats. The sidebar shows
-    // "Archived Chats (N)" only when N > 0.
     private val _archiveChats = MutableStateFlow<List<ChatItem>>(emptyList())
     val archiveChats: StateFlow<List<ChatItem>> = _archiveChats.asStateFlow()
 
     private val _archiveCount = MutableStateFlow(0)
     val archiveCount: StateFlow<Int> = _archiveCount.asStateFlow()
 
-    // Sidebar toggle: false = main chat list, true = archived chat list.
-    // UI flips this when user selects/deselects the Archive entry.
     private val _viewingArchive = MutableStateFlow(false)
     val viewingArchive: StateFlow<Boolean> = _viewingArchive.asStateFlow()
 
@@ -84,22 +64,19 @@ class TdChatRepository(
                     scope.launch { loadArchiveChats() }
                 }
             }
-            else -> { /* ignore */ }
+            else -> {  }
         }
     }
 
-    /**
-     * Load all chats and project to ChatItems. Idempotent.
-     */
     suspend fun loadAllChats(limit: Int = 200) {
         if (_loaded.value && _allChats.value.isNotEmpty()) {
             Log.d(TAG, "loadAllChats: already loaded (${_allChats.value.size}); skipping")
             return
         }
         Log.i(TAG, "loadAllChats: requesting top $limit chats")
-        // loadChats to populate the local cache (TDLib sends updates as it loads)
+
         client.send(TdApi.LoadChats(TdApi.ChatListMain(), limit))
-        // getChats returns the current top of the chat list (offline)
+
         val chatsObj = client.execute(
             TdApi.GetChats(TdApi.ChatListMain(), limit),
             timeoutMs = 10_000L,
@@ -126,14 +103,6 @@ class TdChatRepository(
         }
     }
 
-    /**
-     * Load the archived chat list (TDLib [TdApi.ChatListArchive]). Mirrors
-     * [loadAllChats] but reads from the archive list. Used by the ChatsScreen
-     * sidebar's "Archived Chats (N)" entry.
-     *
-     * Idempotent — refreshes on every UpdateChatPosition / UpdateNewChat after
-     * initial load. Silently no-ops if TDLib returns nothing (archive empty).
-     */
     suspend fun loadArchiveChats(limit: Int = 100) {
         try {
             Log.i(TAG, "loadArchiveChats: requesting top $limit archived chats")
@@ -156,10 +125,6 @@ class TdChatRepository(
         }
     }
 
-    /**
-     * Set the current search query. If non-blank, [_items] shows the matching
-     * chats. If blank, [_items] shows the full list again.
-     */
     fun setSearchQuery(query: String) {
         val q = query.trim()
         if (q == _searchQuery.value) return
@@ -235,8 +200,6 @@ class TdChatRepository(
             else -> ChatType.Unknown
         }
 
-        // Pull the smallest photo size file_id for the avatar (≤ 100px wide).
-        // ChatPhotoInfo has small/big directly; no sizes array here.
         val photoSmallFileId: Int? = resp.photo?.small?.id
 
         return ChatItem(

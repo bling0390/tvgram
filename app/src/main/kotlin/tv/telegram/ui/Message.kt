@@ -26,39 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Top-of-screen toast-style overlay for a transient status message.
- *
- * Pure component — takes [visible] (animates show/hide) and [message]
- * (the text to display). Knows nothing about MainViewModel or auth
- * state; the caller drives the lifecycle.
- *
- * Animation:
- *   enter = fadeIn (300ms) + slideInVertically from -fullHeight (300ms)
- *   exit  = fadeOut (250ms) + slideOutVertically to -fullHeight (250ms)
- *   easing = FastOutSlowIn on the slides (Material standard motion)
- *
- * Visual:
- *   - 25% black full-screen dim
- *   - Top-anchored banner, screen-center horizontally
- *   - 50% screen width, 12dp rounded corners, ~90% opaque dark surface
- *   - 28dp white CircularProgressIndicator + 18sp white label
- *
- * Composition pattern in AppRoot (always rendered, AnimatedVisibility
- * hides when not visible so there's no layout cost):
- * ```
- *   Message(
- *       visible = showSignOutBanner,
- *       message = stringResource(R.string.signing_out),
- *   )
- * ```
- *
- * Sibling overlay components planned for this layer:
- *   - Drawer.kt → side-anchored panel (left/right)
- *   - Dialog.kt → centered modal card
- * Message stays the simple top toast variant — distinct shape, position,
- * and animation from the others.
- */
 @Composable
 fun Message(
     visible: Boolean,
@@ -79,16 +46,13 @@ fun Message(
         modifier = modifier,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Full-screen dim layer so the underlying screen stays visible
-            // but de-emphasized while the banner is up.
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.25f)),
             )
 
-            // Top banner, screen-center horizontally (Alignment.TopCenter
-            // inside the full-screen Box).
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)

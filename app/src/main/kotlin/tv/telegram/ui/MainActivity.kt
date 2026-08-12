@@ -26,12 +26,6 @@ import tv.telegram.ui.login.QrLoginScreen
 import tv.telegram.ui.player.PlayerScreen
 import tv.telegram.ui.theme.TvgramTheme
 
-/**
- * Single Activity, Compose-driven. D-032: stable auth routing via
- * [AppNavHost]; transient hold states (signingOut / signingIn) stay
- * at AppRoot above NavHost so they can override routing during the
- * brief transition window.
- */
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
@@ -49,13 +43,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/**
- * AppRoot. Why split hold states above NavHost: signingOut / signingIn
- * are transient flags that need to keep the current screen visible
- * while TDLib settles (~1s to walk Ready → Closed → WaitPhoneNumber →
- * WaitOtherDeviceConfirmation). Routing through NavHost during that
- * window races auth state changes and tears the layout.
- */
 @Composable
 private fun AppRoot(viewModel: MainViewModel) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
@@ -65,10 +52,7 @@ private fun AppRoot(viewModel: MainViewModel) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
-            // Player is always closed before a sign-out starts (realSignOut
-            // closes it), so during signingOut we can only ever show Home.
-            // The old `if (playerIndex != null) PlayerScreen` branch was
-            // dead code — removed in D-033.
+
             signingOut -> {
                 HomeScreen(viewModel = viewModel, onOpenPlayer = {})
             }
@@ -94,17 +78,6 @@ private fun AppRoot(viewModel: MainViewModel) {
     }
 }
 
-/**
- * AppNavHost. Auth-driven navigate() uses popUpTo(startDestination,
- * inclusive=true) so the user can't Back into the wrong auth state.
- * Player open/close is a normal push/pop so the system Back button
- * pops Player → Home.
- *
- * D-033: the player's media index is a nav ARGUMENT ("player/{index}"),
- * not ViewModel state. Navigation events (open/close/prev/next) call
- * navController directly from the UI — no LaunchedEffect "second-guessing"
- * of a StateFlow. The back stack is the single source of truth.
- */
 @Composable
 private fun AppNavHost(
     viewModel: MainViewModel,
@@ -146,9 +119,7 @@ private fun AppNavHost(
                 index = index,
                 onClose = { navController.popBackStack() },
                 onNavigateTo = { newIndex ->
-                    // Replace the current player entry instead of stacking:
-                    // prev/next should swap the playing item, not grow the
-                    // back stack (Back must always go player → home).
+
                     navController.navigate("player/$newIndex") {
                         popUpTo("player/{index}") { inclusive = true }
                         launchSingleTop = true

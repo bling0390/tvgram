@@ -10,24 +10,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.drinkless.td.libcore.telegram.TdApi
 
-/**
- * TdAuth — listens to TDLib updates and maintains a StateFlow<AuthState>
- * for the UI to collect.
- *
- * TDLib is the source of truth. We translate:
- *   UpdateAuthorizationState   → AuthState transitions
- *
- * And we send:
- *   RequestQrCodeAuthentication     → triggers WaitOtherDeviceConfirmation
- *   LogOut                          → cancels a pending QR login
- *
- * For MVP we only need the QR-login half. Phone/code/registration flows
- * are NOT implemented (D-003 — QR-only login).
- *
- * v1.0.0 (D-029): switched from JSON RPC (`getLoginUrl` + custom qrCode
- * payload) to the correct TDLib API: `RequestQrCodeAuthentication()`.
- * The QR link comes back in `AuthorizationStateWaitOtherDeviceConfirmation.link`.
- */
 class TdAuth(
     private val client: TdClient = TdClient,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
@@ -36,26 +18,10 @@ class TdAuth(
     private val _state = MutableStateFlow<AuthState>(AuthState.Idle)
     val state: StateFlow<AuthState> = _state.asStateFlow()
 
-    /**
-     * Guard against duplicate [TdApi.RequestQrCodeAuthentication] calls.
-     *
-     * The TDLib API is only valid in specific auth states (see
-     * TdApi.java:58722 — `authorizationStateWaitPhoneNumber`, or the
-     * `waitCode`/`waitRegistration`/`waitPassword` states with no
-     * pending query). We set the flag when we send the request and
-     * clear it when we receive the resulting
-     * `AuthorizationStateWaitOtherDeviceConfirmation` link (or when
-     * we transition away from `WaitPhoneNumber` for any other reason).
-     */
     @Volatile private var pendingQrRequest: Boolean = false
 
     init {
-        // Watchdog: if TDLib doesn't transition to
-        // AuthorizationStateWaitOtherDeviceConfirmation within
-        // [pendingQrTimeoutMs] after we sent RequestQrCodeAuthentication,
-        // assume the request was silently dropped (which happens if the
-        // state wasn't WaitPhoneNumber at the moment of the call). Reset
-        // the guard so the next WaitPhoneNumber update will retry.
+
         scope.launch {
             while (true) {
                 kotlinx.coroutines.delay(pendingQrTimeoutMs)
@@ -69,16 +35,6 @@ class TdAuth(
             client.updates.collect { obj -> handleUpdate(obj) }
         }
 
-    // Bootstrap: ask TDLib for the current auth state. TdAuth is
-    // instantiated after TgTvApp.onCreate() calls TdClient.startWithPaths(),
-    // so the initial UpdateAuthorizationState events (WaitTdlibParams →
-    // WaitEncryptionKey) emitted by TDLib happen BEFORE TdAuth subscribes
-    // to client.updates. Since _updates is replay=0, those events are
-    // silently dropped, and TdAuth never receives WaitEncryptionKey →
-    // never sends CheckDatabaseEncryptionKey → TDLib stalls waiting for
-    // the encryption key. Calling GetAuthorizationState asks TDLib to
-    // send the current state via this result handler, which we route
-    // into handleAuthState — same code path as a normal update.
     client.send(TdApi.GetAuthorizationState()) { result ->
         if (result is TdApi.AuthorizationState) {
             handleAuthState(result)
@@ -91,7 +47,7 @@ class TdAuth(
     private fun handleUpdate(obj: TdApi.Object) {
         when (obj) {
             is TdApi.UpdateAuthorizationState -> handleAuthState(obj.authorizationState)
-            else -> { /* ignore other updates */ }
+            else -> {  }
         }
     }
 
@@ -105,13 +61,11 @@ class TdAuth(
             }
             is TdApi.AuthorizationStateWaitEncryptionKey -> {
                 _state.value = AuthState.WaitEncryptionKey
-                // For MVP we don't set an encryption key. TDLib will use
-                // the default (no encryption). If user has a previously
-                // encrypted db this will fail and we surface it via Error.
+
                 client.send(TdApi.CheckDatabaseEncryptionKey(ByteArray(0)))
             }
             is TdApi.AuthorizationStateWaitOtherDeviceConfirmation -> {
-                // Clear the QR-pending guard — we've got the link.
+
                 pendingQrRequest = false
                 val link = authState.link
                 if (link.isNotEmpty()) {
@@ -131,11 +85,7 @@ class TdAuth(
                 _state.value = AuthState.Ready
                 Log.i(TAG, "Authorization complete — Ready")
             }
-            // WaitPhoneNumber is the FIRST state where
-            // RequestQrCodeAuthentication becomes valid (per TDLib
-            // schema). We send the request here — not earlier (TdClient
-            // start, MainViewModel.init), because the request would
-            // land in WaitTdlibParameters where TDLib ignores it.
+
             is TdApi.AuthorizationStateWaitPhoneNumber -> {
                 if (!pendingQrRequest) {
                     Log.i(TAG, "WaitPhoneNumber → sending RequestQrCodeAuthentication")
@@ -144,16 +94,10 @@ class TdAuth(
                     _state.value = AuthState.LoggingIn
                 } else {
                     Log.i(TAG, "WaitPhoneNumber (pendingQr=true) → awaiting QR result")
-                    // Already requested; TDLib will deliver either
-                    // WaitOtherDeviceConfirmation (success) or stay
-                    // here. Don't overwrite LoggingIn.
+
                 }
             }
-            // Other states we don't support — surface as Error so the
-            // UI can show a meaningful message. We expect to never see
-            // these in our QR-only flow, but log loudly if TDLib ever
-            // forces them (e.g. a previously phone-logged-in db that
-            // had a pending code query).
+
             is TdApi.AuthorizationStateWaitCode -> {
                 if (!pendingQrRequest) {
                     Log.w(TAG, "WaitCode (no pending QR) — TDLib may have a stuck code query")
@@ -179,10 +123,6 @@ class TdAuth(
         }
     }
 
-    /**
-     * Ask TDLib for the current user. Returns null if TDLib hasn't
-     * returned a `user` yet (e.g. not yet Ready).
-     */
     suspend fun getMe(timeoutMs: Long = 5_000L): TdUser? {
         val resp = client.execute(TdApi.GetMe(), timeoutMs) ?: return null
         if (resp !is TdApi.User) return null
@@ -195,25 +135,11 @@ class TdAuth(
         )
     }
 
-    /**
-     * Explicitly request QR-code authentication. Normally you DON'T
-     * need to call this — [handleAuthState] sends the request
-     * automatically when it sees `WaitPhoneNumber`. This is exposed
-     * for the "Refresh QR" UI affordance: clearing the in-flight
-     * flag and re-sending gets a fresh link from TDLib.
-     *
-     * Works only when the current authorization state is
-     * `WaitPhoneNumber`, or if there is no pending authentication query
-     * and the state is `WaitCode`, `WaitRegistration`, or `WaitPassword`.
-     */
     fun requestQrLogin() {
         pendingQrRequest = true
         client.send(TdApi.RequestQrCodeAuthentication())
     }
 
-    /**
-     * Cancel a pending QR login. TDLib will transition to a closed state.
-     */
     fun cancelQrLogin() {
         client.send(TdApi.LogOut())
     }
@@ -224,10 +150,6 @@ class TdAuth(
     }
 }
 
-/**
- * TdUser — UI-friendly projection of TDLib's `user` type.
- * Only the fields Tvgram needs for the Settings account row.
- */
 data class TdUser(
     val id: Long,
     val firstName: String,

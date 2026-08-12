@@ -22,10 +22,6 @@ import tv.telegram.td.TdFileRepository
 import tv.telegram.td.TdMediaRepository
 import tv.telegram.td.TdUser
 
-/**
- * Top-level ViewModel for MainActivity. Owns auth, chatRepo, mediaRepo,
- * fileRepo. Exposes StateFlows the Compose tree collects.
- */
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val auth = TdAuth(client = TdClient, scope = viewModelScope)
@@ -44,32 +40,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         chatRepo.setViewingArchive(value)
     }
 
-    /** True during realSignOut() until TDLib reaches WaitQrCode/Error. */
     private val _signingOut = MutableStateFlow(false)
     val signingOut: StateFlow<Boolean> = _signingOut.asStateFlow()
 
-    /**
-     * Decoupled from signingOut so the banner slide-out tween (250ms)
-     * finishes before AppRoot swaps the screen. The 350ms gap covers
-     * the 250ms tween + 100ms buffer.
-     */
     private val _showSignOutBanner = MutableStateFlow(false)
     val showSignOutBanner: StateFlow<Boolean> = _showSignOutBanner.asStateFlow()
 
-    /**
-     * Hold for 500ms after Ready so the "Signing in…" overlay's exit tween
-     * (250ms) can play before AppRoot swaps to HomeScreen. Longer than
-     * sign-out 350ms because WaitQrCode → Ready is typically a single
-     * transition with no visible intermediate state.
-     */
     private val _signingIn = MutableStateFlow(false)
     val signingIn: StateFlow<Boolean> = _signingIn.asStateFlow()
 
     val searchQuery = chatRepo.searchQuery
     val searchSearching = chatRepo.searching
 
-    /** D-031. Cache cleanup is explicit user action (Settings → 清理缓存),
-     *  not part of realSignOut. null = idle, 0..1 = in progress, 1 = finished. */
     val cacheClearProgress: StateFlow<Float?> = TdClient.cacheClearProgress
     private val _cacheSizeBytes = MutableStateFlow(0L)
     val cacheSizeBytes: StateFlow<Long> = _cacheSizeBytes.asStateFlow()
@@ -99,24 +81,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val mediaExhausted = mediaRepo.exhausted
     val currentChatId = mediaRepo.currentChatId
 
-    // title cache: chatId -> title
     private val _chatTitles = MutableStateFlow<Map<Long, String>>(emptyMap())
     val chatTitles: StateFlow<Map<Long, String>> = _chatTitles.asStateFlow()
 
     private val _currentChatTitle = MutableStateFlow<String?>(null)
     val currentChatTitle: StateFlow<String?> = _currentChatTitle.asStateFlow()
 
-    // NOTE (D-033): the player's current media index is NOT held here
-    // anymore. It lives in the NavHost route as "player/{index}", so the
-    // back stack is the single source of truth for "is the player open".
-    // This kills the stale-playerIndex bug where a session kicked to
-    // Closed left the index behind and re-login auto-reopened the player.
-
-    // Playback speed (1.0 = normal). Cycles through [1.0, 1.25, 1.5, 2.0].
     private val _playerPlaybackSpeed = MutableStateFlow(1.0f)
     val playerPlaybackSpeed: StateFlow<Float> = _playerPlaybackSpeed.asStateFlow()
 
-    // Resumed positions per fileId (ms). In-memory only for v0.7.0.
     private val _playerResumePositions = MutableStateFlow<Map<Int, Long>>(emptyMap())
     val playerResumePositions: StateFlow<Map<Int, Long>> = _playerResumePositions.asStateFlow()
 
@@ -125,18 +98,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _navSection = MutableStateFlow(NavSection.Chats)
     val navSection: StateFlow<NavSection> = _navSection.asStateFlow()
 
-    /** null = no chat selected. Separate from mediaRepo.currentChatId (sidebar selection vs deep chat). */
     private val _sidebarSelectedChatId = MutableStateFlow<Long?>(null)
     val sidebarSelectedChatId: StateFlow<Long?> = _sidebarSelectedChatId.asStateFlow()
 
-    /** In-memory mirrors; persistence handled by SettingsRepository. */
     private val _themeMode = MutableStateFlow(ThemeMode.Dark)
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
     private val _language = MutableStateFlow(Language.English)
     val language: StateFlow<Language> = _language.asStateFlow()
 
-    // v0.9.0: TDLib getMe result, refreshed on auth Ready
     private val _currentUser = MutableStateFlow<TdUser?>(null)
     val currentUser: StateFlow<TdUser?> = _currentUser.asStateFlow()
 
@@ -163,7 +133,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         SettingsRepository.setLanguage(getApplication(), lang)
     }
 
-    /** Pre-D-031 logout. Kept for backward compat; the auth state going non-Ready is what routes us back to QrLoginScreen. */
     fun logout() {
         closeChat()
         _sidebarSelectedChatId.value = null
@@ -171,7 +140,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         auth.cancelQrLogin()
     }
 
-    /** v1.0.0 real sign-out. [TdClient.realSignOut] wipes DB only (not file cache — D-031). */
     fun realSignOut() {
         closeChat()
         _sidebarSelectedChatId.value = null
@@ -188,7 +156,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** v0.9.0: fetch the current TG user via TDLib getMe. */
     fun refreshMe() {
         viewModelScope.launch {
             val user = auth.getMe()
@@ -196,7 +163,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Cycle the playback speed: 1.0 → 1.25 → 1.5 → 2.0 → 1.0. */
     fun cyclePlayerSpeed(): Float {
         val next = when (_playerPlaybackSpeed.value) {
             1.0f  -> 1.25f
@@ -219,36 +185,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     init {
-        // Mirror chat list → chatTitles
+
         viewModelScope.launch {
             chatRepo.items.collect { items ->
                 _chatTitles.value = items.associate { it.id to it.title }
             }
         }
-        // Mirror current chat id → title
+
         viewModelScope.launch {
             mediaRepo.currentChatId.collect { id ->
                 _currentChatTitle.value = id?.let { _chatTitles.value[it] }
             }
         }
-        // Hydrate settings from SharedPreferences
+
         val (theme, lang) = SettingsRepository.hydrate(getApplication())
         _themeMode.value = theme
         _language.value = lang
         SettingsRepository.applyLocale(getApplication(), lang)
-        // Whenever auth hits Ready, fetch the current user
+
         viewModelScope.launch {
             auth.state.collect { st ->
                 if (st is AuthState.Ready) refreshMe()
             }
         }
 
-        // D-033 stale-state guard: any transition Ready → non-Ready
-        // (session revoked on another device → Closed, Error, …) must
-        // clear the chat-selection state. The old code only cleared it in
-        // logout()/realSignOut(); a passive kick left sidebarSelectedChatId
-        // alive, and re-login would land on a stale chat. (The player
-        // index can't go stale anymore — it lives in the NavHost route.)
         viewModelScope.launch {
             var wasReady = false
             auth.state.collect { st ->
@@ -262,8 +222,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 wasReady = isReady
             }
         }
-        // After WaitQrCode/Error, clear banner then delay 350ms before
-        // clearing signingOut (lets banner tween finish).
+
         viewModelScope.launch {
             auth.state.collect { st ->
                 if (st is AuthState.WaitQrCode || st is AuthState.Error) {
@@ -274,9 +233,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-        // Drive signingIn so AppRoot can show the "Signing in…" Message
-        // overlay above QrLoginScreen. The 500ms hold on Ready gives the
-        // Message exit tween time to play before HomeScreen swaps in.
         viewModelScope.launch {
             var prev: AuthState? = null
             auth.state.collect { st ->

@@ -68,30 +68,6 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import java.io.File
 
-/**
- * ChatsScreen — the "Chats" pane of the v0.8.0 HomeScreen (B-plan layout).
- *
- *   ┌──────────────┬────────────────────────────────────────┐
- *   │  Sidebar      │  Media grid for the selected chat        │
- *   │  (chat list)  │  - empty placeholder if no chat picked   │
- *   │  - avatar     │  - 3-row horizontal scrolling grid       │
- *   │  - title      │  - 16:10 cards; video → PlayerScreen    │
- *   │  - last msg   │  - photo  → FullScreenMedia (in-place)   │
- *   │  - date       │                                           │
- *   │               │  When user picks a media card, opens the │
- *   │               │  fullscreen viewer; OK/Back to close.    │
- *   └──────────────┴────────────────────────────────────────┘
- *
- * D-pad flow (v0.8.0 v1):
- *   - Sidebar: Up/Down selects chat, OK selects (right pane activates)
- *   - Media grid: Up/Down/Left/Right nav cells, OK opens player / viewer
- *   - ← on media grid jumps focus back to sidebar
- *   - Back closes fullscreen, then exits the chat selection
- *
- * D-033: video taps route through [onOpenPlayer] (NavHost owns the
- * player route + index); photo fullscreen state is rememberSaveable so
- * it survives section switches (SaveableStateHolder in HomeScreen).
- */
 @Composable
 fun ChatsScreen(
     viewModel: MainViewModel,
@@ -108,7 +84,7 @@ fun ChatsScreen(
     val currentChatTitle by viewModel.currentChatTitle.collectAsStateWithLifecycle()
 
     Row(modifier = Modifier.fillMaxSize()) {
-        // ── Sidebar ──────────────────────────────────────────────
+
         ChatSidebar(
             chats = if (viewingArchive) archiveChats else chats,
             loaded = loaded,
@@ -126,7 +102,6 @@ fun ChatsScreen(
                 .padding(vertical = 16.dp, horizontal = 12.dp),
         )
 
-        // ── Right pane ───────────────────────────────────────────
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -163,8 +138,7 @@ private fun ChatSidebar(
     modifier: Modifier = Modifier,
 ) {
     val firstFocus = remember { FocusRequester() }
-    // Re-focus on view toggle so focus follows the new top item
-    // (Back in archive view, Archive entry in main view, first chat if no archive).
+
     LaunchedEffect(viewingArchive) {
         withFrameNanos { }
         try { firstFocus.requestFocus() }
@@ -223,7 +197,7 @@ private fun ChatSidebar(
                     chat = chat,
                     selected = chat.id == selectedChatId,
                     onClick = { onSelect(chat.id) },
-                    // Focus first chat only when there's no Archive/Back entry above it.
+
                     fr = if (chat.id == chats.firstOrNull()?.id && viewingArchive.not() && archiveCount == 0) firstFocus else null,
                     viewModel = viewModel,
                 )
@@ -363,8 +337,6 @@ private fun UnreadBadge(count: Int) {
     }
 }
 
-// ── Right pane: media grid + fullscreen viewer ─────────────────────
-
 @Composable
 private fun EmptyMediaPane(modifier: Modifier = Modifier) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -392,14 +364,11 @@ private fun MediaPane(
     onOpenPlayer: (Int) -> Unit,
     viewModel: MainViewModel,
 ) {
-    // null = grid mode; non-null = fullscreen index into items.
-    // rememberSaveable (D-033): survives section switches via the
-    // SaveableStateHolder in HomeScreen.
+
     var openedIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     val gridState = rememberLazyGridState()
 
-    // Auto-load-more when within 6 cells of end
     val nearEnd by remember {
         derivedStateOf {
             val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
@@ -543,8 +512,6 @@ private fun SidebarMediaCard(
     }
 }
 
-// ── Fullscreen viewer (photos only in v0.8.0; videos go to PlayerScreen) ──
-
 @Composable
 private fun PhotoFullscreen(
     item: MediaItem,
@@ -624,5 +591,3 @@ private fun PhotoFullscreen(
         )
     }
 }
-
-
