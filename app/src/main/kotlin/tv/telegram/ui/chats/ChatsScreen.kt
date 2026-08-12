@@ -410,20 +410,29 @@ private fun MediaPane(
             fontWeight = FontWeight.SemiBold,
         )
         Spacer(Modifier.height(4.dp))
-        Text(
-            text = if (loaded) stringResource(R.string.chats_media_count, items.size)
-                   else stringResource(R.string.chats_media_loading),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 14.sp,
-        )
+        if (loaded) {
+            Text(
+                text = stringResource(R.string.chats_media_count, items.size),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 14.sp,
+            )
+        } else {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 2.dp,
+            )
+        }
         Spacer(Modifier.height(16.dp))
         if (items.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    if (loaded) stringResource(R.string.chats_media_empty)
-                    else stringResource(R.string.chats_media_loading),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (loaded) {
+                    Text(
+                        stringResource(R.string.chats_media_empty),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    CircularProgressIndicator()
+                }
             }
             return@Column
         }
