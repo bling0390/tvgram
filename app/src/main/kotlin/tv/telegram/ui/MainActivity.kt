@@ -105,10 +105,24 @@ private fun AppNavHost(viewModel: MainViewModel) {
         }
     }
 
+    // Decide the initial destination once, at first composition. Making this
+    // reactive to authState would rebuild the whole NavGraph whenever auth
+    // leaves Ready (e.g. mid sign-out), resetting the UI to COLD_START and
+    // racing the GoToQrCode/GoToHome events. Navigation is event-driven only.
+    val startDestination = remember {
+        when {
+            authState is AuthState.Ready -> Routes.HOME
+            authState is AuthState.WaitTdlibParams ||
+                authState is AuthState.WaitEncryptionKey ||
+                authState is AuthState.Idle -> Routes.COLD_START
+            else -> Routes.QR_LOGIN
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
-            startDestination = if (authState is AuthState.Ready) Routes.HOME else Routes.COLD_START,
+            startDestination = startDestination,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = if (inHome) 96.dp else 0.dp),
