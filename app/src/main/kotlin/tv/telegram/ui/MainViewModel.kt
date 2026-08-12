@@ -208,7 +208,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         viewModelScope.launch {
             auth.state.collect { st ->
-                if (st is AuthState.Ready) refreshMe()
+                if (st is AuthState.Ready) {
+                    refreshMe()
+                    // Explicitly load the chat list on Ready. TdChatRepository only
+                    // auto-loads on the UpdateAuthorizationState(Ready) event, which
+                    // TDLib emits once per authorization. If the Activity is recreated
+                    // while the process survives (e.g. TV home button → low memory),
+                    // a fresh repository never sees that event and would stay on
+                    // "loading chats…" forever. These calls are idempotent.
+                    chatRepo.loadAllChats()
+                    chatRepo.loadArchiveChats()
+                }
             }
         }
 
