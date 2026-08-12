@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -162,8 +163,7 @@ private fun ChatSidebar(
         Spacer(Modifier.height(12.dp))
         if (!loaded) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.chats_loading),
-                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                CircularProgressIndicator()
             }
             return@Column
         }
