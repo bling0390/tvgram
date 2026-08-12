@@ -30,6 +30,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -86,9 +87,16 @@ import java.io.File
  *   - Media grid: Up/Down/Left/Right nav cells, OK opens player / viewer
  *   - ← on media grid jumps focus back to sidebar
  *   - Back closes fullscreen, then exits the chat selection
+ *
+ * D-033: video taps route through [onOpenPlayer] (NavHost owns the
+ * player route + index); photo fullscreen state is rememberSaveable so
+ * it survives section switches (SaveableStateHolder in HomeScreen).
  */
 @Composable
-fun ChatsScreen(viewModel: MainViewModel) {
+fun ChatsScreen(
+    viewModel: MainViewModel,
+    onOpenPlayer: (Int) -> Unit,
+) {
     val chats by viewModel.chatList.collectAsStateWithLifecycle()
     val archiveChats by viewModel.archiveChats.collectAsStateWithLifecycle()
     val viewingArchive by viewModel.viewingArchive.collectAsStateWithLifecycle()
@@ -133,21 +141,7 @@ fun ChatsScreen(viewModel: MainViewModel) {
                     title = currentChatTitle,
                     items = mediaItems,
                     loaded = mediaLoaded,
-                    onSelect = { idx ->
-                        val item = mediaItems.getOrNull(idx) ?: return@MediaPane
-                        if (item.type == MediaType.Video) {
-                            viewModel.openPlayer(idx)
-                        } else {
-                            // photos handled internally via FullScreenMedia
-                        }
-                    },
-                    onOpenFullscreen = { idx ->
-                        // for photos; videos go to PlayerScreen
-                        val item = mediaItems.getOrNull(idx) ?: return@MediaPane
-                        if (item.type == MediaType.Photo) {
-                            // openFullscreen handled inside MediaPane via state
-                        }
-                    },
+                    onOpenPlayer = onOpenPlayer,
                     viewModel = viewModel,
                 )
             }
@@ -395,12 +389,13 @@ private fun MediaPane(
     title: String?,
     items: List<MediaItem>,
     loaded: Boolean,
-    onSelect: (Int) -> Unit,
-    onOpenFullscreen: (Int) -> Unit,
+    onOpenPlayer: (Int) -> Unit,
     viewModel: MainViewModel,
 ) {
-    // null = grid mode; non-null = fullscreen index into items
-    var openedIndex by remember { mutableStateOf<Int?>(null) }
+    // null = grid mode; non-null = fullscreen index into items.
+    // rememberSaveable (D-033): survives section switches via the
+    // SaveableStateHolder in HomeScreen.
+    var openedIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     val gridState = rememberLazyGridState()
 
@@ -476,7 +471,7 @@ private fun MediaPane(
                     item = item,
                     onClick = {
                         if (item.type == MediaType.Video) {
-                            viewModel.openPlayer(realIndex)
+                            onOpenPlayer(realIndex)
                         } else {
                             openedIndex = realIndex
                         }

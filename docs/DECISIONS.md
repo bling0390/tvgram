@@ -782,3 +782,46 @@ which:
   APK"). User-testing on the Sony Bravia is the next gate.
 - versionName "1.0.0-debug" stays a `-debug` build (no release
   signing) until the first hardware-verified build is ready.
+
+---
+
+## D-033 · Routing overhaul: single-source navigation, stale-state guard, section state retention · 2026-08-12
+
+**Decision:** Three coordinated refactors (no architecture change — see
+D-033 rationale):
+
+1. **Navigation unification** — the player's media index is now a nav
+   ARGUMENT (`"player/{index}"`), not ViewModel state. Opening the player,
+   closing it, and prev/next are plain `navController` calls from the UI;
+   the two `LaunchedEffect`s that watched `playerMediaIndex` and
+   "second-guessed" the nav stack are gone. The back stack is the single
+   source of truth for "is the player open".
+
+2. **Stale-state guard** — `MainViewModel` now watches for any
+   `Ready → non-Ready` auth transition (session revoked on another
+   device → `Closed`, `Error`, …) and clears chat selection + cached
+   user. Previously only `logout()`/`realSignOut()` cleaned up; a
+   passive kick left `sidebarSelectedChatId` alive, and re-login could
+   land on a stale chat / auto-reopen the player.
+
+3. **Section state retention** — `HomeScreen` wraps each section
+   (Search / Chats / Settings) in a `SaveableStateHolder.SaveableStateProvider`,
+   so switching sections preserves in-screen state: media grid scroll
+   position, photo fullscreen index, and the search keyboard buffer
+   (the latter two also converted from `remember` to `rememberSaveable`).
+
+**Why:**
+- D-032 introduced Navigation Compose for auth routing but left the
+  player on the old state-driven pattern, creating two sources of truth
+  for the same fact (bug: stale player after session kick + re-login).
+- Section switches silently threw away user position — annoying on TV
+  where re-scrolling a long media grid is slow.
+
+**Trade-offs accepted:**
+- Player index lives in the route; a process-death restore of a stale
+  `"player/{index}"` route with an out-of-range index bounces back to
+  the grid via a defensive `onClose()` (same net behavior as before).
+- SigningOut branch in AppRoot no longer renders `PlayerScreen` (that
+  branch was dead code: `realSignOut()` closes the player first).
+- Section state is kept via Compose saveable state, not by nesting
+  NavHost sub-graphs — less machinery, same user-visible result.

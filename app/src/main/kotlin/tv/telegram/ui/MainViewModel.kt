@@ -106,9 +106,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _currentChatTitle = MutableStateFlow<String?>(null)
     val currentChatTitle: StateFlow<String?> = _currentChatTitle.asStateFlow()
 
-    /** Index of the video in mediaItems currently in PlayerScreen. null = not playing. Photos don't open the player. */
-    private val _playerMediaIndex = MutableStateFlow<Int?>(null)
-    val playerMediaIndex: StateFlow<Int?> = _playerMediaIndex.asStateFlow()
+    // NOTE (D-033): the player's current media index is NOT held here
+    // anymore. It lives in the NavHost route as "player/{index}", so the
+    // back stack is the single source of truth for "is the player open".
+    // This kills the stale-playerIndex bug where a session kicked to
+    // Closed left the index behind and re-login auto-reopened the player.
 
     // Playback speed (1.0 = normal). Cycles through [1.0, 1.25, 1.5, 2.0].
     private val _playerPlaybackSpeed = MutableStateFlow(1.0f)
@@ -164,7 +166,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Pre-D-031 logout. Kept for backward compat; the auth state going non-Ready is what routes us back to QrLoginScreen. */
     fun logout() {
         closeChat()
-        closePlayer()
         _sidebarSelectedChatId.value = null
         _currentUser.value = null
         auth.cancelQrLogin()
@@ -173,7 +174,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** v1.0.0 real sign-out. [TdClient.realSignOut] wipes DB only (not file cache — D-031). */
     fun realSignOut() {
         closeChat()
-        closePlayer()
         _sidebarSelectedChatId.value = null
         _currentUser.value = null
         _showSignOutBanner.value = true
@@ -194,19 +194,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val user = auth.getMe()
             _currentUser.value = user
         }
-    }
-
-    fun openPlayer(index: Int) {
-        _playerMediaIndex.value = index
-    }
-
-    fun closePlayer() {
-        _playerMediaIndex.value = null
-    }
-
-    fun stepPlayer(delta: Int) {
-        val cur = _playerMediaIndex.value ?: return
-        _playerMediaIndex.value = cur + delta
     }
 
     /** Cycle the playback speed: 1.0 → 1.25 → 1.5 → 2.0 → 1.0. */
@@ -253,6 +240,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             auth.state.collect { st ->
                 if (st is AuthState.Ready) refreshMe()
+            }
+        }
+
+        // D-033 stale-state guard: any transition Ready → non-Ready
+        // (session revoked on another device → Closed, Error, …) must
+        // clear the chat-selection state. The old code only cleared it in
+        // logout()/realSignOut(); a passive kick left sidebarSelectedChatId
+        // alive, and re-login would land on a stale chat. (The player
+        // index can't go stale anymore — it lives in the NavHost route.)
+        viewModelScope.launch {
+            var wasReady = false
+            auth.state.collect { st ->
+                val isReady = st is AuthState.Ready
+                if (wasReady && !isReady) {
+                    Log.i("MainViewModel", "auth left Ready (${st.javaClass.simpleName}); clearing chat selection")
+                    closeChat()
+                    _sidebarSelectedChatId.value = null
+                    _currentUser.value = null
+                }
+                wasReady = isReady
             }
         }
         // After WaitQrCode/Error, clear banner then delay 350ms before

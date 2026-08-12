@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,10 +67,19 @@ import androidx.tv.material3.Text
  *
  * D-pad on the rail: Up / Down cycles sections, OK jumps into the
  * section content (focus requester on the section's first focusable).
+ *
+ * D-033: each section is wrapped in a [SaveableStateProvider] keyed by
+ * the section, so switching Search ↔ Chats ↔ Settings preserves the
+ * section's internal saveable state (grid scroll position, photo
+ * fullscreen, search buffer) instead of disposing it.
  */
 @Composable
-fun HomeScreen(viewModel: MainViewModel) {
+fun HomeScreen(
+    viewModel: MainViewModel,
+    onOpenPlayer: (Int) -> Unit,
+) {
     val section by viewModel.navSection.collectAsStateWithLifecycle()
+    val saveableStateHolder = rememberSaveableStateHolder()
 
     Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         NavRail(
@@ -77,10 +87,12 @@ fun HomeScreen(viewModel: MainViewModel) {
             onSelect = { viewModel.selectNavSection(it) },
         )
         Box(modifier = Modifier.fillMaxSize()) {
-            when (section) {
-                MainViewModel.NavSection.Search  -> SearchScreen(viewModel)
-                MainViewModel.NavSection.Chats   -> ChatsScreen(viewModel)
-                MainViewModel.NavSection.Settings -> SettingsScreen(viewModel)
+            saveableStateHolder.SaveableStateProvider(section) {
+                when (section) {
+                    MainViewModel.NavSection.Search  -> SearchScreen(viewModel)
+                    MainViewModel.NavSection.Chats   -> ChatsScreen(viewModel, onOpenPlayer)
+                    MainViewModel.NavSection.Settings -> SettingsScreen(viewModel)
+                }
             }
         }
     }

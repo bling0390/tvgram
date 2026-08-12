@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -73,8 +74,10 @@ fun SearchScreen(viewModel: MainViewModel) {
 
     // editBuffer is what the user is typing; searchQuery is the
     // debounced, viewModel-side source of truth that drives the filter.
-    var editBuffer by remember { mutableStateOf("") }
-    var keyboardOpen by remember { mutableStateOf(false) }
+    // rememberSaveable (D-033): survives section switches via the
+    // SaveableStateHolder in HomeScreen.
+    var editBuffer by rememberSaveable { mutableStateOf("") }
+    var keyboardOpen by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(editBuffer) {
         if (editBuffer == searchQuery) return@LaunchedEffect

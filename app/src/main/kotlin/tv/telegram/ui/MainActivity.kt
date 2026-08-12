@@ -13,6 +13,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -57,19 +59,18 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppRoot(viewModel: MainViewModel) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
-    val playerIndex by viewModel.playerMediaIndex.collectAsStateWithLifecycle()
     val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
     val showSignOutBanner by viewModel.showSignOutBanner.collectAsStateWithLifecycle()
     val signingIn by viewModel.signingIn.collectAsStateWithLifecycle()
 
     Box(modifier = Modifier.fillMaxSize()) {
         when {
+            // Player is always closed before a sign-out starts (realSignOut
+            // closes it), so during signingOut we can only ever show Home.
+            // The old `if (playerIndex != null) PlayerScreen` branch was
+            // dead code — removed in D-033.
             signingOut -> {
-                if (playerIndex != null) {
-                    PlayerScreen(viewModel = viewModel)
-                } else {
-                    HomeScreen(viewModel = viewModel)
-                }
+                HomeScreen(viewModel = viewModel, onOpenPlayer = {})
             }
             signingIn -> {
                 QrLoginScreen(viewModel = viewModel)
@@ -78,7 +79,6 @@ private fun AppRoot(viewModel: MainViewModel) {
                 AppNavHost(
                     viewModel = viewModel,
                     authState = authState,
-                    playerIndex = playerIndex,
                 )
             }
         }
@@ -99,12 +99,16 @@ private fun AppRoot(viewModel: MainViewModel) {
  * inclusive=true) so the user can't Back into the wrong auth state.
  * Player open/close is a normal push/pop so the system Back button
  * pops Player → Home.
+ *
+ * D-033: the player's media index is a nav ARGUMENT ("player/{index}"),
+ * not ViewModel state. Navigation events (open/close/prev/next) call
+ * navController directly from the UI — no LaunchedEffect "second-guessing"
+ * of a StateFlow. The back stack is the single source of truth.
  */
 @Composable
 private fun AppNavHost(
     viewModel: MainViewModel,
     authState: AuthState,
-    playerIndex: Int?,
 ) {
     val navController = rememberNavController()
 
@@ -121,24 +125,36 @@ private fun AppNavHost(
         }
     }
 
-    LaunchedEffect(playerIndex) {
-        val current = navController.currentDestination?.route
-        when {
-            playerIndex != null && current != "player" -> {
-                navController.navigate("player")
-            }
-            playerIndex == null && current == "player" -> {
-                navController.popBackStack()
-            }
-        }
-    }
-
     NavHost(
         navController = navController,
         startDestination = if (authState is AuthState.Ready) "home" else "qrLogin",
     ) {
         composable("qrLogin") { QrLoginScreen(viewModel = viewModel) }
-        composable("home") { HomeScreen(viewModel = viewModel) }
-        composable("player") { PlayerScreen(viewModel = viewModel) }
+        composable("home") {
+            HomeScreen(
+                viewModel = viewModel,
+                onOpenPlayer = { index -> navController.navigate("player/$index") },
+            )
+        }
+        composable(
+            route = "player/{index}",
+            arguments = listOf(navArgument("index") { type = NavType.IntType }),
+        ) { entry ->
+            val index = entry.arguments?.getInt("index") ?: 0
+            PlayerScreen(
+                viewModel = viewModel,
+                index = index,
+                onClose = { navController.popBackStack() },
+                onNavigateTo = { newIndex ->
+                    // Replace the current player entry instead of stacking:
+                    // prev/next should swap the playing item, not grow the
+                    // back stack (Back must always go player → home).
+                    navController.navigate("player/$newIndex") {
+                        popUpTo("player/{index}") { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+            )
+        }
     }
 }

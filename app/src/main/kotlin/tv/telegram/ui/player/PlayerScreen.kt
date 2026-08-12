@@ -82,22 +82,31 @@ import androidx.tv.material3.Text
  *     Video item in [mediaItems] (skipping photos). Stops at the end of
  *     the chat's media list.
  *   - Resume from saved position (per fileId, in-memory for v0.7.0).
+ *
+ * D-033: the player is a NavHost route "player/{index}"; the index is a
+ * nav ARGUMENT (not ViewModel state). Close / prev / next are plain
+ * callbacks that drive navController directly — no StateFlow second-guessing.
  */
 @Composable
-fun PlayerScreen(viewModel: MainViewModel) {
+fun PlayerScreen(
+    viewModel: MainViewModel,
+    index: Int,
+    onClose: () -> Unit,
+    onNavigateTo: (Int) -> Unit,
+) {
     val context = LocalContext.current
     val mediaItems by viewModel.mediaItems.collectAsStateWithLifecycle()
-    val index by viewModel.playerMediaIndex.collectAsStateWithLifecycle()
     val speed by viewModel.playerPlaybackSpeed.collectAsStateWithLifecycle()
     val resumeMap by viewModel.playerResumePositions.collectAsStateWithLifecycle()
 
-    if (index == null || index !in mediaItems.indices) {
-        // Defensive: nothing to play. Bounce back to grid.
-        LaunchedEffect(Unit) { viewModel.closePlayer() }
+    if (index !in mediaItems.indices) {
+        // Defensive: nothing to play (e.g. process death restored a stale
+        // route, or the chat was closed under us). Bounce back to grid.
+        LaunchedEffect(Unit) { onClose() }
         return
     }
 
-    val current = mediaItems[index!!]
+    val current = mediaItems[index]
 
     // Build a sub-list of "video" indices so prev/next skips photos.
     val videoIndices = remember(mediaItems) {
@@ -106,6 +115,9 @@ fun PlayerScreen(viewModel: MainViewModel) {
     val posInVideos = remember(videoIndices, index) { videoIndices.indexOf(index) }
     val hasPrevVideo = posInVideos > 0
     val hasNextVideo = posInVideos in 0 until videoIndices.lastIndex
+
+    /** Absolute index of the next/previous video in mediaItems, or null. */
+    fun neighborVideo(delta: Int): Int? = videoIndices.getOrNull(posInVideos + delta)
 
     // Pre-download the current video file (TdFileRepository caches by fileId).
     val currentFileState = viewModel.fileStateFor(current.fileId)
@@ -161,18 +173,19 @@ fun PlayerScreen(viewModel: MainViewModel) {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
                     viewModel.clearPlayerPosition(current.fileId)
-                    if (hasNextVideo) {
-                        viewModel.stepPlayer(videoIndices[posInVideos + 1] - (index ?: 0))
+                    val next = neighborVideo(+1)
+                    if (next != null) {
+                        onNavigateTo(next)
                     } else {
-                        viewModel.closePlayer()
+                        onClose()
                     }
                 }
             }
         })
     }
 
-    // BackHandler: close player.
-    BackHandler(enabled = true) { viewModel.closePlayer() }
+    // BackHandler: close player (pops the route).
+    BackHandler(enabled = true) { onClose() }
 
     // Focus requester so D-pad events land here first.
     val focusRequester = remember { FocusRequester() }
@@ -225,20 +238,11 @@ fun PlayerScreen(viewModel: MainViewModel) {
                         true
                     }
                     Key.MediaPrevious -> {
-                        if (hasPrevVideo) {
-                            viewModel.stepPlayer(
-                                videoIndices[(posInVideos - 1).coerceAtLeast(0)] - (index ?: 0)
-                            )
-                        }
+                        neighborVideo(-1)?.let { onNavigateTo(it) }
                         true
                     }
                     Key.MediaNext -> {
-                        if (hasNextVideo) {
-                            viewModel.stepPlayer(
-                                videoIndices[(posInVideos + 1).coerceAtMost(videoIndices.lastIndex)] -
-                                    (index ?: 0)
-                            )
-                        }
+                        neighborVideo(+1)?.let { onNavigateTo(it) }
                         true
                     }
                     Key.DirectionCenter, Key.Enter, Key.MediaPlayPause, Key.MediaPlay,
@@ -293,7 +297,7 @@ fun PlayerScreen(viewModel: MainViewModel) {
                 durationMs = { exo.duration.coerceAtLeast(0L) },
                 isPlaying = { exo.isPlaying },
                 speed = speed,
-                positionText = "${index!! + 1} / ${mediaItems.size}",
+                positionText = "${index + 1} / ${mediaItems.size}",
                 onPlayPause = {
                     if (exo.isPlaying) exo.pause() else exo.play()
                     bumpController()
@@ -314,21 +318,10 @@ fun PlayerScreen(viewModel: MainViewModel) {
                     bumpController()
                 },
                 onPrev = if (hasPrevVideo) {
-                    {
-                        viewModel.stepPlayer(
-                            videoIndices[(posInVideos - 1).coerceAtLeast(0)] - (index ?: 0)
-                        )
-                        bumpController()
-                    }
+                    { neighborVideo(-1)?.let { onNavigateTo(it) }; bumpController() }
                 } else null,
                 onNext = if (hasNextVideo) {
-                    {
-                        viewModel.stepPlayer(
-                            videoIndices[(posInVideos + 1).coerceAtMost(videoIndices.lastIndex)] -
-                                (index ?: 0)
-                        )
-                        bumpController()
-                    }
+                    { neighborVideo(+1)?.let { onNavigateTo(it) }; bumpController() }
                 } else null,
             )
         }
