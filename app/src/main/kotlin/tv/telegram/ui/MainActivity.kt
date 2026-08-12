@@ -223,8 +223,8 @@ private fun NavRail(
     modifier: Modifier = Modifier,
 ) {
     val entries = listOf(
-        NavEntry(Routes.HOME_CHATS, stringResource(R.string.nav_chats)),
         NavEntry(Routes.HOME_SEARCH, stringResource(R.string.nav_search)),
+        NavEntry(Routes.HOME_CHATS, stringResource(R.string.nav_chats)),
         NavEntry(Routes.HOME_SETTINGS, stringResource(R.string.nav_settings)),
     )
 
