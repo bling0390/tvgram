@@ -8,29 +8,39 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -119,13 +129,22 @@ private fun AppNavHost(viewModel: MainViewModel) {
         }
     }
 
+    // Sidebar: expands (icon + label) while it holds focus, collapses to
+    // icon-only once focus moves to the content area. Width animates and the
+    // NavHost padding follows so content never gets covered.
+    var railExpanded by remember { mutableStateOf(false) }
+    val railWidth by animateDpAsState(
+        targetValue = if (railExpanded) 220.dp else 96.dp,
+        label = "railWidth",
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = if (inHome) 96.dp else 0.dp),
+                .padding(start = if (inHome) railWidth else 0.dp),
         ) {
             composable(Routes.COLD_START) { ColdStartScreen(viewModel = viewModel) }
 
@@ -175,6 +194,8 @@ private fun AppNavHost(viewModel: MainViewModel) {
         if (inHome) {
             NavRail(
                 current = currentRoute,
+                expanded = railExpanded,
+                onExpandedChange = { railExpanded = it },
                 onSelect = { route ->
                     navController.navigate(route) {
                         popUpTo(Routes.HOME) { saveState = true }
@@ -184,7 +205,7 @@ private fun AppNavHost(viewModel: MainViewModel) {
                 },
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .width(96.dp)
+                    .width(railWidth)
                     .fillMaxHeight(),
             )
         }
@@ -196,6 +217,8 @@ private data class NavEntry(val route: String, val label: String)
 @Composable
 private fun NavRail(
     current: String?,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -217,14 +240,16 @@ private fun NavRail(
     Column(
         modifier = modifier
             .background(Color(0xFF141414))
-            .padding(vertical = 24.dp, horizontal = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .onFocusChanged { onExpandedChange(it.hasFocus) }
+            .padding(vertical = 24.dp, horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalAlignment = Alignment.Start,
     ) {
         entries.forEachIndexed { idx, entry ->
             RailItem(
                 entry = entry,
                 selected = current == entry.route,
+                expanded = expanded,
                 onClick = { onSelect(entry.route) },
                 fr = if (idx == 0) railFocus else null,
             )
@@ -236,34 +261,54 @@ private fun NavRail(
 private fun RailItem(
     entry: NavEntry,
     selected: Boolean,
+    expanded: Boolean,
     onClick: () -> Unit,
     fr: FocusRequester? = null,
 ) {
     val containerColor = when {
-        selected -> MaterialTheme.colorScheme.primary
-        else -> Color(0xFF2A2A2A)
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
+        else -> Color.Transparent
     }
     Card(
         onClick = onClick,
         colors = CardDefaults.colors(
             containerColor = containerColor,
-            focusedContainerColor = MaterialTheme.colorScheme.secondary,
+            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
         ),
-        scale = CardDefaults.scale(focusedScale = 1.10f),
+        shape = CardDefaults.shape(
+            RoundedCornerShape(14.dp),
+            RoundedCornerShape(14.dp),
+            RoundedCornerShape(14.dp),
+        ),
         modifier = Modifier
-            .size(width = 80.dp, height = 80.dp)
+            .fillMaxWidth()
+            .height(52.dp)
             .let { if (fr != null) it.focusRequester(fr) else it },
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize().padding(8.dp),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = entry.label,
-                color = Color.White,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
+            // Placeholder icon: white circle. Swap for a real icon later.
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(Color.White),
             )
+            if (expanded) {
+                Text(
+                    text = entry.label,
+                    color = if (selected) MaterialTheme.colorScheme.onBackground else Color(0xFFB0B0B0),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
