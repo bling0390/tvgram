@@ -141,6 +141,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             databaseDirectory = java.io.File(app.filesDir, "tdlib").absolutePath,
             filesDirectory = java.io.File(app.filesDir, "tdlib-files").absolutePath,
         )
+        // client was restarted by realSignOut; re-apply proxy for the fresh instance
+        TdClient.enableProxy(
+            host     = BuildConfig.PROXY_HOST,
+            port     = BuildConfig.PROXY_PORT,
+            type     = BuildConfig.PROXY_TYPE,
+            username = BuildConfig.PROXY_USER,
+            password = BuildConfig.PROXY_PASS,
+        )
     }
 
     fun refreshMe() {
