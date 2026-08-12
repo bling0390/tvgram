@@ -1,6 +1,7 @@
 package tv.telegram.ui.nav
 
 object Routes {
+    const val COLD_START = "coldStart"
     const val QR_LOGIN = "qrLogin"
     const val HOME = "home"
     const val HOME_SEARCH = "home/search"

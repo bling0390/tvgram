@@ -4,9 +4,11 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import android.util.Log
@@ -21,6 +23,11 @@ import tv.telegram.td.TdClient
 import tv.telegram.td.TdFileRepository
 import tv.telegram.td.TdMediaRepository
 import tv.telegram.td.TdUser
+
+sealed class NavEvent {
+    data object GoToQrCode : NavEvent()
+    data object GoToHome : NavEvent()
+}
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -40,11 +47,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         chatRepo.setViewingArchive(value)
     }
 
-    private val _signingOut = MutableStateFlow(false)
-    val signingOut: StateFlow<Boolean> = _signingOut.asStateFlow()
+    private val _navEvents = MutableSharedFlow<NavEvent>()
+    val navEvents: SharedFlow<NavEvent> = _navEvents.asSharedFlow()
 
-    private val _signingIn = MutableStateFlow(false)
-    val signingIn: StateFlow<Boolean> = _signingIn.asStateFlow()
+    private fun emitNav(event: NavEvent) {
+        viewModelScope.launch { _navEvents.emit(event) }
+    }
 
     val searchQuery = chatRepo.searchQuery
     val searchSearching = chatRepo.searching
@@ -132,7 +140,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         closeChat()
         _sidebarSelectedChatId.value = null
         _currentUser.value = null
-        _signingOut.value = true
+        emitNav(NavEvent.GoToQrCode)
         val app = getApplication<TgTvApp>()
         TdClient.realSignOut(
             context = app,
@@ -219,28 +227,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         viewModelScope.launch {
-            auth.state.collect { st ->
-                if (st is AuthState.WaitQrCode || st is AuthState.Error) {
-                    _signingOut.value = false
-                }
-            }
-        }
-
-        viewModelScope.launch {
             var prev: AuthState? = null
+            var coldStartHandled = false
+            var wasReady = false
             auth.state.collect { st ->
-                if (prev is AuthState.WaitQrCode && st !is AuthState.WaitQrCode) {
-                    _signingIn.value = true
-                }
-                if (st is AuthState.Ready && _signingIn.value) {
-                    viewModelScope.launch {
-                        delay(500)
-                        _signingIn.value = false
+                val isReady = st is AuthState.Ready
+                val wasInit = prev is AuthState.WaitTdlibParams || prev is AuthState.WaitEncryptionKey
+                val nowInit = st is AuthState.WaitTdlibParams || st is AuthState.WaitEncryptionKey
+                if (!coldStartHandled && wasInit && !nowInit) {
+                    // 冷启动：离开初始化态 → 首次定向（唯一一次）
+                    coldStartHandled = true
+                    when {
+                        isReady -> { emitNav(NavEvent.GoToHome); wasReady = true }
+                        st !is AuthState.Error -> emitNav(NavEvent.GoToQrCode)
+                        else -> { /* 初始化阶段 Error：留在冷启动页兑底 */ }
                     }
+                } else if (isReady && !wasReady && !(prev is AuthState.WaitTdlibParams || prev is AuthState.WaitEncryptionKey)) {
+                    // 非冷启动路径进入 Ready（扫码成功等）
+                    emitNav(NavEvent.GoToHome)
                 }
-                if (st is AuthState.Error) {
-                    _signingIn.value = false
-                }
+                wasReady = isReady
                 prev = st
             }
         }

@@ -44,7 +44,8 @@ import androidx.navigation.compose.rememberNavController
 import tv.telegram.R
 import tv.telegram.td.AuthState
 import tv.telegram.ui.chats.ChatsScreen
-import tv.telegram.ui.login.QrLoginScreen
+import tv.telegram.ui.login.ColdStartScreen
+import tv.telegram.ui.login.QrCodeScreen
 import tv.telegram.ui.player.PlayerScreen
 import tv.telegram.ui.search.SearchScreen
 import tv.telegram.ui.settings.SettingsScreen
@@ -75,21 +76,18 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppNavHost(viewModel: MainViewModel) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
-    val signingIn by viewModel.signingIn.collectAsStateWithLifecycle()
 
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val inHome = currentRoute?.startsWith(Routes.HOME) == true
 
-    LaunchedEffect(authState, signingIn) {
-        val target = when {
-            signingIn -> Routes.QR_LOGIN
-            authState is AuthState.Ready -> Routes.HOME
-            else -> Routes.QR_LOGIN
-        }
-        val current = navController.currentDestination?.route
-        if (current != target) {
+    LaunchedEffect(Unit) {
+        viewModel.navEvents.collect { event ->
+            val target = when (event) {
+                NavEvent.GoToQrCode -> Routes.QR_LOGIN
+                NavEvent.GoToHome -> Routes.HOME
+            }
             navController.navigate(target) {
                 popUpTo(navController.graph.id) {
                     inclusive = true
@@ -110,12 +108,14 @@ private fun AppNavHost(viewModel: MainViewModel) {
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
-            startDestination = if (authState is AuthState.Ready) Routes.HOME else Routes.QR_LOGIN,
+            startDestination = if (authState is AuthState.Ready) Routes.HOME else Routes.COLD_START,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = if (inHome) 96.dp else 0.dp),
         ) {
-            composable(Routes.QR_LOGIN) { QrLoginScreen(viewModel = viewModel) }
+            composable(Routes.COLD_START) { ColdStartScreen(viewModel = viewModel) }
+
+            composable(Routes.QR_LOGIN) { QrCodeScreen(viewModel = viewModel) }
 
             navigation(startDestination = Routes.HOME_CHATS, route = Routes.HOME) {
                 composable(Routes.HOME_SEARCH) {
@@ -174,11 +174,6 @@ private fun AppNavHost(viewModel: MainViewModel) {
                     .fillMaxHeight(),
             )
         }
-
-        Message(
-            visible = signingIn,
-            message = stringResource(R.string.signing_in),
-        )
     }
 }
 

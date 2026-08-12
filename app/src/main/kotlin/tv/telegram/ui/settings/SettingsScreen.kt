@@ -51,7 +51,6 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val lang by viewModel.language.collectAsStateWithLifecycle()
     val user by viewModel.currentUser.collectAsStateWithLifecycle()
     val authState by viewModel.authState.collectAsStateWithLifecycle()
-    val signingOut by viewModel.signingOut.collectAsStateWithLifecycle()
     val cacheSizeBytes by viewModel.cacheSizeBytes.collectAsStateWithLifecycle()
     val cacheClearProgress by viewModel.cacheClearProgress.collectAsStateWithLifecycle()
 
@@ -60,7 +59,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
     var showClearCacheConfirm by remember { mutableStateOf(false) }
 
     val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(signingOut) { if (!signingOut) firstFocus.requestFocus() }
+    LaunchedEffect(Unit) { firstFocus.requestFocus() }
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
 
     Box(

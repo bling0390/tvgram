@@ -7,6 +7,7 @@
     <string name="login_title">Scan From Mobile Telegram</string>
     <string name="login_subtitle">1. Open Telegram on your phone\n2. Go to Settings &gt; Devices &gt; Scan QR\n3. Scan this image to Log In</string>
     <string name="login_failed">Login failed: %1$s</string>
+    <string name="initializing">Initializing…</string>
 
     <!-- Nav rail -->
     <string name="nav_search">Search</string>
@@ -81,8 +82,6 @@
     <string name="settings_clear_cache_progress">Clearing… %1$d%%</string>
     <string name="settings_clear_cache_done">Cleared %1$s of cache.</string>
     <string name="settings_clear_cache_dialog_done_button">Done</string>
-    <string name="signing_out">Signing out…</string>
-    <string name="signing_in">Signing in…</string>
     <string name="settings_language_english">English</string>
     <string name="settings_language_simplified_chinese">简体中文</string>
     <string name="settings_language_traditional_chinese">繁體中文</string>
