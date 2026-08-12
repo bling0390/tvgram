@@ -305,16 +305,21 @@ private fun SidebarItem(
     viewModel: MainViewModel,
 ) {
     val containerColor = when {
-        selected -> MaterialTheme.colorScheme.primary
-        else -> Color(0xFF1F1F1F)
+        selected -> Color(0xFF2E3A48) // 胶囊高亮（与侧边栏一致）
+        else -> Color.Transparent
     }
     Card(
         onClick = onClick,
         colors = CardDefaults.colors(
             containerColor = containerColor,
-            focusedContainerColor = MaterialTheme.colorScheme.secondary,
+            focusedContainerColor = Color(0xFF3A4A5C),
         ),
         scale = CardDefaults.scale(focusedScale = 1.04f),
+        shape = CardDefaults.shape(
+            RoundedCornerShape(50),
+            RoundedCornerShape(50),
+            RoundedCornerShape(50),
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .height(64.dp)
@@ -329,7 +334,7 @@ private fun SidebarItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     chat.title,
-                    color = Color.White,
+                    color = if (selected) Color.White else Color(0xFFD0D0D0),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -337,7 +342,7 @@ private fun SidebarItem(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = chat.lastMessageText ?: chat.type.name,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = if (selected) Color.White.copy(alpha = 0.85f) else Color(0xFF909090),
                     fontSize = 12.sp,
                     maxLines = 1,
                 )
