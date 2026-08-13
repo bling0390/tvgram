@@ -320,7 +320,12 @@ private fun ArchiveEntry(
             containerColor = Color(0xFF2A2A2A),
             focusedContainerColor = MaterialTheme.colorScheme.secondary,
         ),
-        scale = CardDefaults.scale(focusedScale = 1.04f),
+        scale = CardDefaults.scale(focusedScale = 1f),
+        border = CardDefaults.border(
+            Border.None,
+            Border.None,
+            Border.None,
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)
@@ -368,7 +373,7 @@ private fun SidebarItem(
             containerColor = containerColor,
             focusedContainerColor = Color(0xFF3A4A5C),
         ),
-        scale = CardDefaults.scale(focusedScale = 1.04f),
+        scale = CardDefaults.scale(focusedScale = 1f),
         shape = CardDefaults.shape(
             RoundedCornerShape(50),
             RoundedCornerShape(50),
@@ -681,7 +686,12 @@ private fun SidebarMediaCard(
     }
     Card(
         onClick = onClick,
-        scale = CardDefaults.scale(focusedScale = 1.05f),
+        scale = CardDefaults.scale(focusedScale = 1f),
+        border = CardDefaults.border(
+            Border.None,
+            Border.None,
+            Border.None,
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(16f / 10f),
