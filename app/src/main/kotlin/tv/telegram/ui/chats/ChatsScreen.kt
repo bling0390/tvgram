@@ -379,34 +379,37 @@ private fun SidebarItem(
                         )
                     }
                 }
-                Spacer(Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val thumbId = chat.lastMessageThumbFileId
-                    val thumbState = if (thumbId != null) {
-                        (viewModel.fileStateFor(thumbId) as? FileDownloadState.Local)?.path
-                    } else null
-                    LaunchedEffect(thumbId) {
-                        if (thumbId != null && thumbState == null) {
-                            viewModel.ensureMediaFile(thumbId, priority = 8)
+                val summary = chat.lastMessageText
+                if (summary != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val thumbId = chat.lastMessageThumbFileId
+                        val thumbState = if (thumbId != null) {
+                            (viewModel.fileStateFor(thumbId) as? FileDownloadState.Local)?.path
+                        } else null
+                        LaunchedEffect(thumbId) {
+                            if (thumbId != null && thumbState == null) {
+                                viewModel.ensureMediaFile(thumbId, priority = 8)
+                            }
                         }
-                    }
-                    if (thumbState != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(ctx).data(File(thumbState)).build(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(18.dp)
-                                .clip(RoundedCornerShape(4.dp)),
+                        if (thumbState != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(ctx).data(File(thumbState)).build(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(
+                            text = summary,
+                            color = if (selected) Color.White.copy(alpha = 0.85f) else Color(0xFF909090),
+                            fontSize = 12.sp,
+                            maxLines = 1,
                         )
-                        Spacer(Modifier.width(6.dp))
                     }
-                    Text(
-                        text = chat.lastMessageText ?: chat.type.name,
-                        color = if (selected) Color.White.copy(alpha = 0.85f) else Color(0xFF909090),
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                    )
                 }
             }
             if (chat.unreadCount > 0) {
