@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -44,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -213,6 +215,7 @@ private fun ChatSidebar(
                 item(key = "show-archive") {
                     ArchiveEntry(
                         label = "Archived Chats ($archiveCount)",
+                        icon = Icons.Default.VisibilityOff,
                         onClick = onShowArchive,
                         fr = firstFocus,
                     )
@@ -270,6 +273,7 @@ private fun ChatListError(
 private fun ArchiveEntry(
     label: String,
     onClick: () -> Unit,
+    icon: ImageVector? = null,
     fr: FocusRequester? = null,
 ) {
     Card(
@@ -288,6 +292,15 @@ private fun ArchiveEntry(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+            }
             Text(
                 label,
                 color = Color.White,
