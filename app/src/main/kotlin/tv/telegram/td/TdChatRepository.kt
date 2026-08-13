@@ -216,6 +216,7 @@ class TdChatRepository(
         }
         val title = resp.title.ifEmpty { "Unnamed chat" }
         val unread = resp.unreadCount
+        val lastMessageText = resp.lastMessage?.let { messageText(it) }
         val lastMessageDate = resp.lastMessage?.date ?: 0
 
         val type = when (val t = resp.type) {
@@ -233,10 +234,27 @@ class TdChatRepository(
             title = title,
             type = type,
             unreadCount = unread,
-            lastMessageText = null,
+            lastMessageText = lastMessageText,
             lastMessageDate = lastMessageDate,
             photoSmallFileId = photoSmallFileId,
         )
+    }
+
+    /** Short human-readable summary of a message's content, for the chat list second line. */
+    private fun messageText(message: TdApi.Message): String? = when (val c = message.content) {
+        is TdApi.MessageText -> c.text.text.ifBlank { null }
+        is TdApi.MessagePhoto -> "Photo"
+        is TdApi.MessageVideo -> "Video"
+        is TdApi.MessageAnimation -> "GIF"
+        is TdApi.MessageSticker -> c.sticker.emoji.ifBlank { "Sticker" }
+        is TdApi.MessageDocument -> c.document.fileName.ifBlank { "File" }
+        is TdApi.MessageAudio -> "Audio"
+        is TdApi.MessageVoiceNote -> "Voice"
+        is TdApi.MessageVideoNote -> "Video message"
+        is TdApi.MessageCall -> "Call"
+        is TdApi.MessageLocation -> "Location"
+        is TdApi.MessageContact -> "Contact"
+        else -> null
     }
 
     companion object {

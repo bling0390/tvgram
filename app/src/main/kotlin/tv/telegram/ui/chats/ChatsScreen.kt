@@ -25,6 +25,9 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
@@ -53,6 +56,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -352,13 +356,27 @@ private fun SidebarItem(
             AvatarPlaceholder(chat = chat, viewModel = viewModel)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    chat.title,
-                    color = if (selected) Color.White else Color(0xFFD0D0D0),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        chat.title,
+                        color = if (selected) Color.White else Color(0xFFD0D0D0),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    val typeIcon = chat.type.typeIcon()
+                    if (typeIcon != null) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            imageVector = typeIcon,
+                            contentDescription = null,
+                            tint = if (selected) Color.White.copy(alpha = 0.8f) else Color(0xFF909090),
+                            modifier = Modifier.size(13.dp),
+                        )
+                    }
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = chat.lastMessageText ?: chat.type.name,
@@ -415,6 +433,14 @@ private fun UnreadDot() {
             .size(10.dp)
             .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(5.dp)),
     )
+}
+
+/** Chat-type glyph for the title row: Person (private) / Groups (group) / Campaign (channel). */
+private fun ChatType.typeIcon(): ImageVector? = when (this) {
+    ChatType.Private -> Icons.Default.Person
+    ChatType.Group -> Icons.Default.Groups
+    ChatType.Channel -> Icons.Default.Campaign
+    else -> null
 }
 
 @Composable
