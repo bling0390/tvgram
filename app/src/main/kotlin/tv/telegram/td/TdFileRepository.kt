@@ -59,30 +59,38 @@ class TdFileRepository(
 
         _states.value = _states.value + (fileId to FileDownloadState.Pending())
 
-        val fileObj = client.execute(TdApi.GetFile(fileId), timeoutMs = 5_000L)
-        if (fileObj !is TdApi.File) {
-            Log.w(TAG, "ensureLocal($fileId): getFile returned ${fileObj?.javaClass?.simpleName ?: "null"}")
-            _states.value = _states.value + (fileId to FileDownloadState.Failed("getFile failed"))
-            return null
-        }
-        val local = fileObj.local
-        if (local != null && local.isDownloadingCompleted) {
-            _states.value = _states.value + (fileId to FileDownloadState.Local(local.path))
-            return local.path
-        }
+        return try {
+            val fileObj = client.execute(TdApi.GetFile(fileId), timeoutMs = 5_000L)
+            if (fileObj !is TdApi.File) {
+                Log.w(TAG, "ensureLocal($fileId): getFile returned ${fileObj?.javaClass?.simpleName ?: "null"}")
+                _states.value = _states.value + (fileId to FileDownloadState.Failed("getFile failed"))
+                return null
+            }
+            val local = fileObj.local
+            if (local != null && local.isDownloadingCompleted) {
+                _states.value = _states.value + (fileId to FileDownloadState.Local(local.path))
+                return local.path
+            }
 
-        val deferred = CompletableDeferred<String>()
-        pendingDownloads[fileId] = deferred
-        client.send(TdApi.DownloadFile(fileId, priority, 0, 0, false))
+            val deferred = CompletableDeferred<String>()
+            pendingDownloads[fileId] = deferred
+            client.send(TdApi.DownloadFile(fileId, priority, 0, 0, false))
 
-        val path = withTimeoutOrNull(timeoutMs) {
-            try { deferred.await() } catch (_: Throwable) { null }
-        }
-        if (path == null) {
+            val path = withTimeoutOrNull(timeoutMs) {
+                try { deferred.await() } catch (_: Throwable) { null }
+            }
+            if (path == null) {
+                pendingDownloads.remove(fileId)
+                _states.value = _states.value + (fileId to FileDownloadState.Failed("download timeout"))
+            }
+            path
+        } catch (e: Throwable) {
+            // Never let a file fetch crash the app — callers fall back to placeholder.
+            Log.w(TAG, "ensureLocal($fileId) threw", e)
             pendingDownloads.remove(fileId)
-            _states.value = _states.value + (fileId to FileDownloadState.Failed("download timeout"))
+            _states.value = _states.value + (fileId to FileDownloadState.Failed("exception: ${e.javaClass.simpleName}"))
+            null
         }
-        return path
     }
 
     fun stateFor(fileId: Int): FileDownloadState? = _states.value[fileId]

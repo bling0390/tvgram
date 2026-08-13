@@ -446,6 +446,7 @@ private fun AvatarPlaceholder(chat: ChatItem, viewModel: MainViewModel) {
     val localPath = if (photoId != null) {
         (viewModel.fileStateFor(photoId) as? FileDownloadState.Local)?.path
     } else null
+    var imageFailed by remember(photoId, localPath) { mutableStateOf(false) }
     LaunchedEffect(photoId) {
         if (photoId != null && localPath == null) {
             viewModel.ensureMediaFile(photoId, priority = 16)
@@ -465,11 +466,12 @@ private fun AvatarPlaceholder(chat: ChatItem, viewModel: MainViewModel) {
             .padding(0.dp),
         contentAlignment = Alignment.Center,
     ) {
-        if (localPath != null) {
+        if (localPath != null && !imageFailed) {
             AsyncImage(
                 model = ImageRequest.Builder(ctx).data(File(localPath)).build(),
                 contentDescription = chat.title,
                 contentScale = ContentScale.Crop,
+                onError = { imageFailed = true },
                 modifier = Modifier.size(44.dp).background(color, RoundedCornerShape(22.dp)),
             )
         } else {
