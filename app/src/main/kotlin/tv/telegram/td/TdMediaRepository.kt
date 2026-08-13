@@ -90,6 +90,15 @@ class TdMediaRepository(
         if (items.isEmpty() || resp.messages.size < limit) {
             _exhausted.value = true
         }
+
+        // Opening a chat = reading it (TV OK is an explicit "I'm looking at
+        // this chat" action, not a hover). Mark the newest message as viewed
+        // so TDLib emits UpdateChatReadInbox → the unread dot clears.
+        val newestId = resp.messages.firstOrNull()?.id
+        if (newestId != null) {
+            client.send(TdApi.ViewMessages(chatId, 0L, longArrayOf(newestId), true))
+            Log.i(TAG, "openAndLoad: marked chat $chatId read (newest msg $newestId)")
+        }
     }
 
     suspend fun loadMore(limit: Int = 100) {
