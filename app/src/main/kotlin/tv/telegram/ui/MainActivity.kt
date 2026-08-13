@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,8 +35,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -213,7 +217,7 @@ private fun AppNavHost(viewModel: MainViewModel) {
     }
 }
 
-private data class NavEntry(val route: String, val label: String)
+private data class NavEntry(val route: String, val label: String, val icon: ImageVector)
 
 @Composable
 private fun NavRail(
@@ -224,9 +228,9 @@ private fun NavRail(
     modifier: Modifier = Modifier,
 ) {
     val entries = listOf(
-        NavEntry(Routes.HOME_SEARCH, stringResource(R.string.nav_search)),
-        NavEntry(Routes.HOME_CHATS, stringResource(R.string.nav_chats)),
-        NavEntry(Routes.HOME_SETTINGS, stringResource(R.string.nav_settings)),
+        NavEntry(Routes.HOME_SEARCH, stringResource(R.string.nav_search), Icons.Default.Search),
+        NavEntry(Routes.HOME_CHATS, stringResource(R.string.nav_chats), Icons.Default.Chat),
+        NavEntry(Routes.HOME_SETTINGS, stringResource(R.string.nav_settings), Icons.Default.Settings),
     )
 
     val railFocus = remember { FocusRequester() }
@@ -298,12 +302,11 @@ private fun RailItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Placeholder icon: white circle. Swap for a real icon later.
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(if (selected) Color(0xFF9BDCFE) else Color(0xFFB0B0B0)),
+            Icon(
+                imageVector = entry.icon,
+                contentDescription = null,
+                tint = if (selected) Color(0xFF9BDCFE) else Color(0xFFB0B0B0),
+                modifier = Modifier.size(26.dp),
             )
             if (expanded) {
                 Text(
