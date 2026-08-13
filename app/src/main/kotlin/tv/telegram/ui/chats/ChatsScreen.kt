@@ -354,7 +354,7 @@ private fun SidebarItem(
                 )
             }
             if (chat.unreadCount > 0) {
-                UnreadBadge(count = chat.unreadCount)
+                UnreadDot()
             }
         }
     }
@@ -395,15 +395,12 @@ private fun AvatarPlaceholder(chat: ChatItem, viewModel: MainViewModel) {
 }
 
 @Composable
-private fun UnreadBadge(count: Int) {
-    val display = if (count > 99) "99+" else count.toString()
+private fun UnreadDot() {
     Box(
         modifier = Modifier
-            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-    ) {
-        Text(display, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-    }
+            .size(10.dp)
+            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(5.dp)),
+    )
 }
 
 @Composable

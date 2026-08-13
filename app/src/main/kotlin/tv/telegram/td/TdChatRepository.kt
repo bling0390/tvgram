@@ -67,8 +67,24 @@ class TdChatRepository(
                     scope.launch { loadArchiveChats() }
                 }
             }
+            is TdApi.UpdateChatReadInbox -> {
+                applyUnreadCount(obj.chatId, obj.unreadCount)
+            }
             else -> {  }
         }
+    }
+
+    /**
+     * Live-update the unread count for a chat without a full list reload.
+     * Only the dot indicator (present/absent) is rendered from this value,
+     * so we just patch the matching ChatItem in every published list.
+     */
+    private fun applyUnreadCount(chatId: Long, count: Int) {
+        fun patch(list: List<ChatItem>): List<ChatItem> =
+            list.map { if (it.id == chatId) it.copy(unreadCount = count) else it }
+        _allChats.value = patch(_allChats.value)
+        _archiveChats.value = patch(_archiveChats.value)
+        _items.value = patch(_items.value)
     }
 
     suspend fun loadAllChats(limit: Int = 200) {
