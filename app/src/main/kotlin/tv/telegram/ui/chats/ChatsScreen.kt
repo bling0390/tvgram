@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -167,6 +168,11 @@ private fun ChatSidebar(
     modifier: Modifier = Modifier,
 ) {
     val firstFocus = remember { FocusRequester() }
+    // True while focus sits on the first focusable list item. When it does,
+    // DirectionUp is consumed so focus stays put instead of jumping to the
+    // NavRail (Compose's default directional focus search would find Search
+    // at top-left). Left key is the deliberate path back to the rail.
+    var firstItemFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewingArchive) {
         withFrameNanos { }
@@ -209,34 +215,59 @@ private fun ChatSidebar(
             }
             return@Column
         }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.onKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionUp && firstItemFocused) {
+                    true // at the top of the list — consume, stay put
+                } else {
+                    false
+                }
+            },
+        ) {
             if (viewingArchive) {
                 item(key = "back-to-main") {
-                    ArchiveEntry(
-                        label = "Back to Chats",
-                        onClick = onShowMain,
-                        fr = firstFocus,
-                    )
+                    Box(Modifier.onFocusChanged { firstItemFocused = it.hasFocus }) {
+                        ArchiveEntry(
+                            label = "Back to Chats",
+                            onClick = onShowMain,
+                            fr = firstFocus,
+                        )
+                    }
                 }
             } else if (archiveCount > 0) {
                 item(key = "show-archive") {
-                    ArchiveEntry(
-                        label = "Archived Chats ($archiveCount)",
-                        icon = Icons.Default.VisibilityOff,
-                        onClick = onShowArchive,
-                        fr = firstFocus,
-                    )
+                    Box(Modifier.onFocusChanged { firstItemFocused = it.hasFocus }) {
+                        ArchiveEntry(
+                            label = "Archived Chats ($archiveCount)",
+                            icon = Icons.Default.VisibilityOff,
+                            onClick = onShowArchive,
+                            fr = firstFocus,
+                        )
+                    }
                 }
             }
             items(chats, key = { it.id }) { chat ->
-                SidebarItem(
-                    chat = chat,
-                    selected = chat.id == selectedChatId,
-                    onClick = { onSelect(chat.id) },
-
-                    fr = if (chat.id == chats.firstOrNull()?.id && viewingArchive.not() && archiveCount == 0) firstFocus else null,
-                    viewModel = viewModel,
-                )
+                val isFirst = chat.id == chats.firstOrNull()?.id && viewingArchive.not() && archiveCount == 0
+                if (isFirst) {
+                    Box(Modifier.onFocusChanged { firstItemFocused = it.hasFocus }) {
+                        SidebarItem(
+                            chat = chat,
+                            selected = chat.id == selectedChatId,
+                            onClick = { onSelect(chat.id) },
+                            fr = firstFocus,
+                            viewModel = viewModel,
+                        )
+                    }
+                } else {
+                    SidebarItem(
+                        chat = chat,
+                        selected = chat.id == selectedChatId,
+                        onClick = { onSelect(chat.id) },
+                        fr = null,
+                        viewModel = viewModel,
+                    )
+                }
             }
         }
     }
