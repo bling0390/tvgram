@@ -70,6 +70,9 @@ class TdChatRepository(
             is TdApi.UpdateChatReadInbox -> {
                 applyUnreadCount(obj.chatId, obj.unreadCount)
             }
+            is TdApi.UpdateChatNotificationSettings -> {
+                applyMuted(obj.chatId, obj.notificationSettings)
+            }
             else -> {  }
         }
     }
@@ -86,6 +89,19 @@ class TdChatRepository(
         _archiveChats.value = patch(_archiveChats.value)
         _items.value = patch(_items.value)
     }
+
+    /** Patch a chat's muted state from a notification-settings update. */
+    private fun applyMuted(chatId: Long, settings: TdApi.ChatNotificationSettings) {
+        val muted = isMuted(settings)
+        fun patch(list: List<ChatItem>): List<ChatItem> =
+            list.map { if (it.id == chatId) it.copy(isMuted = muted) else it }
+        _allChats.value = patch(_allChats.value)
+        _archiveChats.value = patch(_archiveChats.value)
+        _items.value = patch(_items.value)
+    }
+
+    private fun isMuted(settings: TdApi.ChatNotificationSettings): Boolean =
+        !settings.useDefaultMuteFor && settings.muteFor > 0
 
     suspend fun loadAllChats(limit: Int = 200) {
         if (_loaded.value && _allChats.value.isNotEmpty()) {
@@ -216,6 +232,7 @@ class TdChatRepository(
         }
         val title = resp.title.ifEmpty { "Unnamed chat" }
         val unread = resp.unreadCount
+        val muted = resp.notificationSettings?.let { isMuted(it) } ?: false
         val lastMessageText = resp.lastMessage?.let { messageText(it) }
         val lastMessageThumbFileId = resp.lastMessage?.let { messageThumbFileId(it) }
         val lastMessageDate = resp.lastMessage?.date ?: 0
@@ -235,6 +252,7 @@ class TdChatRepository(
             title = title,
             type = type,
             unreadCount = unread,
+            isMuted = muted,
             lastMessageText = lastMessageText,
             lastMessageDate = lastMessageDate,
             lastMessageThumbFileId = lastMessageThumbFileId,

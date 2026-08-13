@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -376,6 +377,15 @@ private fun SidebarItem(
                             contentDescription = null,
                             tint = if (selected) Color.White.copy(alpha = 0.8f) else Color(0xFF909090),
                             modifier = Modifier.size(13.dp),
+                        )
+                    }
+                    if (chat.isMuted) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.VolumeOff,
+                            contentDescription = null,
+                            tint = if (selected) Color.White.copy(alpha = 0.7f) else Color(0xFF808080),
+                            modifier = Modifier.size(12.dp),
                         )
                     }
                 }
