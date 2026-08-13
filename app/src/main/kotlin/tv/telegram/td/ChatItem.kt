@@ -10,6 +10,7 @@ data class ChatItem(
     val type: ChatType,
     val unreadCount: Int,
     val isMuted: Boolean = false,
+    val isVerified: Boolean = false,
     val lastMessageText: String?,
     val lastMessageDate: Int = 0,
     val lastMessageThumbFileId: Int? = null,

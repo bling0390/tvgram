@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.Warning
@@ -369,6 +370,15 @@ private fun SidebarItem(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (chat.isVerified) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = null,
+                            tint = Color(0xFF4A9EF5),
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
                     val typeIcon = chat.type.typeIcon()
                     if (typeIcon != null) {
                         Spacer(Modifier.width(4.dp))

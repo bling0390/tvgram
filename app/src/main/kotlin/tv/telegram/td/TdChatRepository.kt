@@ -245,6 +245,18 @@ class TdChatRepository(
             else -> ChatType.Unknown
         }
 
+        // Verified flag lives on User / Supergroup in this TDLib version,
+        // not on Chat — fetch it per chat type (both hit local DB first).
+        val verified = when (val t = resp.type) {
+            is TdApi.ChatTypePrivate ->
+                (client.execute(TdApi.GetUser(t.userId), timeoutMs = 3_000L) as? TdApi.User)?.isVerified ?: false
+            is TdApi.ChatTypeSecret ->
+                (client.execute(TdApi.GetUser(t.userId), timeoutMs = 3_000L) as? TdApi.User)?.isVerified ?: false
+            is TdApi.ChatTypeSupergroup ->
+                (client.execute(TdApi.GetSupergroup(t.supergroupId), timeoutMs = 3_000L) as? TdApi.Supergroup)?.isVerified ?: false
+            else -> false
+        }
+
         val photoSmallFileId: Int? = resp.photo?.small?.id
 
         return ChatItem(
@@ -253,6 +265,7 @@ class TdChatRepository(
             type = type,
             unreadCount = unread,
             isMuted = muted,
+            isVerified = verified,
             lastMessageText = lastMessageText,
             lastMessageDate = lastMessageDate,
             lastMessageThumbFileId = lastMessageThumbFileId,
