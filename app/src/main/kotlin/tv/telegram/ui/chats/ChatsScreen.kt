@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -576,6 +576,16 @@ private fun MediaPane(
             .collect { viewModel.loadMoreMedia() }
     }
 
+    // Photo fullscreen paging: when viewing near the end of the loaded
+    // list, prefetch the next search page so next/prev keeps working
+    // past the current data boundary.
+    LaunchedEffect(openedIndex, items.size) {
+        val idx = openedIndex ?: return@LaunchedEffect
+        if (idx >= items.size - 8 && !viewModel.mediaExhausted.value) {
+            viewModel.loadMoreMedia()
+        }
+    }
+
     if (openedIndex != null) {
         val idx = openedIndex!!
         if (idx in items.indices) {
@@ -636,15 +646,14 @@ private fun MediaPane(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            gridItems(items, key = { it.messageId }) { item ->
-                val realIndex = items.indexOfFirst { it.messageId == item.messageId }
+            gridItemsIndexed(items, key = { _, item -> item.messageId }) { index, item ->
                 SidebarMediaCard(
                     item = item,
                     onClick = {
                         if (item.type == MediaType.Video) {
-                            onOpenPlayer(realIndex)
+                            onOpenPlayer(index)
                         } else {
-                            openedIndex = realIndex
+                            openedIndex = index
                         }
                     },
                     viewModel = viewModel,

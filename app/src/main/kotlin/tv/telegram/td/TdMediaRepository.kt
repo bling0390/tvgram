@@ -65,26 +65,32 @@ class TdMediaRepository(
 
         client.send(TdApi.OpenChat(chatId))
 
+        // Pure media pagination: search returns photo/video messages only,
+        // no need to pull full history and filter. fromMessageId=0 starts
+        // from the newest message; each later page advances the cursor.
         val resp = client.execute(
-            TdApi.GetChatHistory(chatId, 0L, 0, limit, false),
+            TdApi.SearchChatMessages(
+                chatId, "", null, 0L, 0, limit,
+                TdApi.SearchMessagesFilterPhotoAndVideo(), 0L,
+            ),
             timeoutMs = 10_000L,
         )
         if (resp == null) {
-            Log.w(TAG, "getChatHistory timed out")
+            Log.w(TAG, "searchChatMessages timed out")
             _error.value = "Loading timed out. Press OK to retry."
             _loaded.value = true
             return
         }
         if (resp !is TdApi.Messages) {
             val errMsg = (resp as? TdApi.Error)?.message ?: resp.javaClass.simpleName
-            Log.w(TAG, "getChatHistory returned ${resp.javaClass.simpleName}: $errMsg")
+            Log.w(TAG, "searchChatMessages returned ${resp.javaClass.simpleName}: $errMsg")
             _error.value = "Error: $errMsg"
             _loaded.value = true
             return
         }
         val items = resp.messages
             .mapNotNull { parseMessage(it, chatId) }
-        Log.i(TAG, "Loaded ${items.size} media items from ${resp.messages.size} messages (page 1)")
+        Log.i(TAG, "Loaded ${items.size} media items from ${resp.messages.size} search results (page 1)")
         _items.value = items
         _loaded.value = true
         if (items.isEmpty() || resp.messages.size < limit) {
@@ -123,15 +129,21 @@ class TdMediaRepository(
         val oldestMessageId = current.last().messageId
         _loadingMore.value = true
         try {
+            // Advance the search cursor past the oldest loaded media message.
+            // offset=0 returns matches before fromMessageId; the seen-set below
+            // dedupes just in case a message comes back twice.
             val resp = client.execute(
-                TdApi.GetChatHistory(chatId, oldestMessageId, 0, limit, false),
+                TdApi.SearchChatMessages(
+                    chatId, "", null, oldestMessageId, 0, limit,
+                    TdApi.SearchMessagesFilterPhotoAndVideo(), 0L,
+                ),
             )
             if (resp !is TdApi.Messages) {
                 Log.w(TAG, "loadMore: unexpected type ${resp?.javaClass?.simpleName}")
                 return
             }
             val newItems = resp.messages.mapNotNull { parseMessage(it, chatId) }
-            Log.i(TAG, "loadMore: got ${newItems.size} media items from ${resp.messages.size} messages")
+            Log.i(TAG, "loadMore: got ${newItems.size} media items from ${resp.messages.size} search results")
             val seen = current.map { it.messageId }.toHashSet()
             val merged = current + newItems.filter { it.messageId !in seen }
             _items.value = merged

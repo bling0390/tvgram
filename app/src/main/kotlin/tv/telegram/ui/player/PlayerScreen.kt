@@ -75,6 +75,16 @@ fun PlayerScreen(
     val mediaItems by viewModel.mediaItems.collectAsStateWithLifecycle()
     val speed by viewModel.playerPlaybackSpeed.collectAsStateWithLifecycle()
     val resumeMap by viewModel.playerResumePositions.collectAsStateWithLifecycle()
+    val mediaExhausted by viewModel.mediaExhausted.collectAsStateWithLifecycle()
+
+    // Cross-page continuous playback: when playing near the end of the
+    // loaded media list, prefetch the next search page so the playlist
+    // keeps growing past the current data boundary.
+    LaunchedEffect(index, mediaItems.size, mediaExhausted) {
+        if (!mediaExhausted && index >= mediaItems.size - 8) {
+            viewModel.loadMoreMedia()
+        }
+    }
 
     if (index !in mediaItems.indices) {
 
