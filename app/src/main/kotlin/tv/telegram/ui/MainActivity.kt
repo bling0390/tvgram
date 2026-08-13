@@ -276,6 +276,7 @@ private fun RailItem(
     }
     Card(
         onClick = onClick,
+        scale = CardDefaults.scale(focusedScale = 1f),
         colors = CardDefaults.colors(
             containerColor = containerColor,
             focusedContainerColor = Color(0xFF3A4A5C),
