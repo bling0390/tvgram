@@ -446,6 +446,11 @@ private fun AvatarPlaceholder(chat: ChatItem, viewModel: MainViewModel) {
     val localPath = if (photoId != null) {
         (viewModel.fileStateFor(photoId) as? FileDownloadState.Local)?.path
     } else null
+    LaunchedEffect(photoId) {
+        if (photoId != null && localPath == null) {
+            viewModel.ensureMediaFile(photoId, priority = 16)
+        }
+    }
     val color = when (chat.type) {
         ChatType.Channel -> Color(0xFF4A90E2)
         ChatType.Group -> Color(0xFF50C878)
