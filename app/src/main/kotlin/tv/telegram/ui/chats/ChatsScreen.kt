@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
@@ -502,9 +502,9 @@ private fun MediaPane(
             }
             return@Column
         }
-        LazyHorizontalGrid(
+        LazyVerticalGrid(
             state = gridState,
-            rows = GridCells.Fixed(3),
+            columns = GridCells.Fixed(3),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize(),
@@ -547,7 +547,7 @@ private fun SidebarMediaCard(
         onClick = onClick,
         scale = CardDefaults.scale(focusedScale = 1.05f),
         modifier = Modifier
-            .size(280.dp)
+            .fillMaxWidth()
             .aspectRatio(16f / 10f),
     ) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
