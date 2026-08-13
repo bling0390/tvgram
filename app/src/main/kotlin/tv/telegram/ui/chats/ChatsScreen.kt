@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -566,10 +567,21 @@ private fun SidebarMediaCard(
                     modifier = Modifier.fillMaxSize().background(Color(0xFF202020)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        if (item.type == MediaType.Video) "\u25B6  Video" else "Photo",
-                        color = Color.White.copy(alpha = 0.7f),
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (item.type == MediaType.Video) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.size(22.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Text(
+                            if (item.type == MediaType.Video) "Video" else "Photo",
+                            color = Color.White.copy(alpha = 0.7f),
+                        )
+                    }
                 }
             }
             if (item.type == MediaType.Video) {
@@ -580,7 +592,12 @@ private fun SidebarMediaCard(
                         .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
-                    Text("\u25B6", color = Color.White, fontSize = 14.sp)
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp),
+                    )
                 }
             }
         }
