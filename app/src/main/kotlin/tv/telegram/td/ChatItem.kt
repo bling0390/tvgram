@@ -11,6 +11,7 @@ data class ChatItem(
     val unreadCount: Int,
     val lastMessageText: String?,
     val lastMessageDate: Int = 0,
+    val lastMessageThumbFileId: Int? = null,
     val photoSmallFileId: Int? = null,
     val photoBigFileId: Int? = null,
     val photo: Bitmap? = null,

@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -323,6 +324,7 @@ private fun SidebarItem(
     fr: FocusRequester? = null,
     viewModel: MainViewModel,
 ) {
+    val ctx = LocalContext.current
     val containerColor = when {
         selected -> Color(0xFF2E3A48) // 胶囊高亮（与侧边栏一致）
         else -> Color.Transparent
@@ -378,12 +380,34 @@ private fun SidebarItem(
                     }
                 }
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    text = chat.lastMessageText ?: chat.type.name,
-                    color = if (selected) Color.White.copy(alpha = 0.85f) else Color(0xFF909090),
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val thumbId = chat.lastMessageThumbFileId
+                    val thumbState = if (thumbId != null) {
+                        (viewModel.fileStateFor(thumbId) as? FileDownloadState.Local)?.path
+                    } else null
+                    LaunchedEffect(thumbId) {
+                        if (thumbId != null && thumbState == null) {
+                            viewModel.ensureMediaFile(thumbId, priority = 8)
+                        }
+                    }
+                    if (thumbState != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(ctx).data(File(thumbState)).build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(
+                        text = chat.lastMessageText ?: chat.type.name,
+                        color = if (selected) Color.White.copy(alpha = 0.85f) else Color(0xFF909090),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                    )
+                }
             }
             if (chat.unreadCount > 0) {
                 UnreadDot()

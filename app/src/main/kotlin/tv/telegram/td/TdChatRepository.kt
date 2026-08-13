@@ -217,6 +217,7 @@ class TdChatRepository(
         val title = resp.title.ifEmpty { "Unnamed chat" }
         val unread = resp.unreadCount
         val lastMessageText = resp.lastMessage?.let { messageText(it) }
+        val lastMessageThumbFileId = resp.lastMessage?.let { messageThumbFileId(it) }
         val lastMessageDate = resp.lastMessage?.date ?: 0
 
         val type = when (val t = resp.type) {
@@ -236,6 +237,7 @@ class TdChatRepository(
             unreadCount = unread,
             lastMessageText = lastMessageText,
             lastMessageDate = lastMessageDate,
+            lastMessageThumbFileId = lastMessageThumbFileId,
             photoSmallFileId = photoSmallFileId,
         )
     }
@@ -248,6 +250,16 @@ class TdChatRepository(
     private fun messageText(message: TdApi.Message): String? = when (val c = message.content) {
         is TdApi.MessagePhoto -> "Photo"
         is TdApi.MessageVideo -> "Video"
+        else -> null
+    }
+
+    /** Thumbnail file id of the last media message, for the small preview before the summary text. */
+    private fun messageThumbFileId(message: TdApi.Message): Int? = when (val c = message.content) {
+        is TdApi.MessagePhoto -> c.photo.sizes
+            .filter { it.photo.id != 0 }
+            .minByOrNull { it.width * it.height }
+            ?.photo?.id
+        is TdApi.MessageVideo -> c.video.thumbnail?.file?.id
         else -> null
     }
 
