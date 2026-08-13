@@ -67,6 +67,7 @@ import tv.telegram.td.FileDownloadState
 import tv.telegram.td.MediaItem
 import tv.telegram.td.MediaType
 import tv.telegram.ui.MainViewModel
+import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
@@ -319,6 +320,11 @@ private fun SidebarItem(
             RoundedCornerShape(50),
             RoundedCornerShape(50),
             RoundedCornerShape(50),
+        ),
+        border = CardDefaults.border(
+            Border.None,
+            Border.None,
+            Border.None,
         ),
         modifier = Modifier
             .fillMaxWidth()

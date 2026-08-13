@@ -61,6 +61,7 @@ import tv.telegram.ui.search.SearchScreen
 import tv.telegram.ui.settings.SettingsScreen
 import tv.telegram.ui.nav.Routes
 import tv.telegram.ui.theme.TvgramTheme
+import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
@@ -279,6 +280,11 @@ private fun RailItem(
             RoundedCornerShape(50),
             RoundedCornerShape(50),
             RoundedCornerShape(50),
+        ),
+        border = CardDefaults.border(
+            Border.None,
+            Border.None,
+            Border.None,
         ),
         modifier = Modifier
             .fillMaxWidth()
