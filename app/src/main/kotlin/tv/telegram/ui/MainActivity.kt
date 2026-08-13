@@ -274,6 +274,9 @@ private fun RailItem(
         selected -> Color(0xFF2E3A48) // 比底色略亮的蓝灰胶囊背景（参照截图）
         else -> Color.Transparent
     }
+    // Collapsed (icon-only) rail item is a 52dp circle with the icon
+    // centered; expanded it becomes a full-width capsule with label.
+    val itemShape = RoundedCornerShape(if (expanded) 50 else 26)
     Card(
         onClick = onClick,
         scale = CardDefaults.scale(focusedScale = 1f),
@@ -282,9 +285,9 @@ private fun RailItem(
             focusedContainerColor = Color(0xFF3A4A5C),
         ),
         shape = CardDefaults.shape(
-            RoundedCornerShape(50),
-            RoundedCornerShape(50),
-            RoundedCornerShape(50),
+            itemShape,
+            itemShape,
+            itemShape,
         ),
         border = CardDefaults.border(
             Border.None,
@@ -292,16 +295,16 @@ private fun RailItem(
             Border.None,
         ),
         modifier = Modifier
-            .fillMaxWidth()
+            .then(if (expanded) Modifier.fillMaxWidth() else Modifier.size(52.dp))
             .height(52.dp)
             .let { if (fr != null) it.focusRequester(fr) else it },
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = if (expanded) 12.dp else 0.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = if (expanded) Arrangement.spacedBy(12.dp) else Arrangement.Center,
         ) {
             Icon(
                 imageVector = entry.icon,
