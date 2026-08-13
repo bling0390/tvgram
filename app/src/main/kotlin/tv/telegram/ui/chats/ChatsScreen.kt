@@ -472,7 +472,10 @@ private fun AvatarPlaceholder(chat: ChatItem, viewModel: MainViewModel) {
                 contentDescription = chat.title,
                 contentScale = ContentScale.Crop,
                 onError = { imageFailed = true },
-                modifier = Modifier.size(44.dp).background(color, RoundedCornerShape(22.dp)),
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(color, RoundedCornerShape(22.dp)),
             )
         } else {
             Text(initial, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
