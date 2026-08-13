@@ -240,20 +240,14 @@ class TdChatRepository(
         )
     }
 
-    /** Short human-readable summary of a message's content, for the chat list second line. */
+    /**
+     * Summary for the chat list second line. tvgram is a photo/video-focused
+     * TV app, so only media messages produce a summary; everything else
+     * returns null and the UI falls back to the chat type name.
+     */
     private fun messageText(message: TdApi.Message): String? = when (val c = message.content) {
-        is TdApi.MessageText -> c.text.text.ifBlank { null }
         is TdApi.MessagePhoto -> "Photo"
         is TdApi.MessageVideo -> "Video"
-        is TdApi.MessageAnimation -> "GIF"
-        is TdApi.MessageSticker -> c.sticker.emoji.ifBlank { "Sticker" }
-        is TdApi.MessageDocument -> c.document.fileName.ifBlank { "File" }
-        is TdApi.MessageAudio -> "Audio"
-        is TdApi.MessageVoiceNote -> "Voice"
-        is TdApi.MessageVideoNote -> "Video message"
-        is TdApi.MessageCall -> "Call"
-        is TdApi.MessageLocation -> "Location"
-        is TdApi.MessageContact -> "Contact"
         else -> null
     }
 
