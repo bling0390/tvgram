@@ -787,9 +787,9 @@ private fun SidebarMediaCard(
         onClick = onClick,
         scale = CardDefaults.scale(focusedScale = 1.10f),
         border = CardDefaults.border(
-            // Plan A: focus indicator = brand-blue inner border, immune to
-            // dark thumbnails blending into the dark background.
-            Border(BorderStroke(3.dp, Color(0xFF4A9EF5))),
+            // Plan A: focus indicator = brand-blue inner border (1dp), immune
+            // to dark thumbnails blending into the dark background.
+            Border(BorderStroke(1.dp, Color(0xFF4A9EF5))),
             Border.None,
             Border.None,
         ),
