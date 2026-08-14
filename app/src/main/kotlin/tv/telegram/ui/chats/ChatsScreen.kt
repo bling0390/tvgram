@@ -73,6 +73,7 @@ import android.widget.Toast
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.media3.common.MediaItem as ExoMediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.compose.PlayerSurface
 import kotlinx.coroutines.delay
@@ -593,12 +594,29 @@ private fun MediaPane(
     // Set while the preview file is being downloaded (before playback starts),
     // so the card can show a loading spinner in place of the play icon.
     var previewLoadingMessageId by remember { mutableStateOf<Long?>(null) }
+    // Set only once the preview player has actually rendered its first frame.
+    // Until then the card keeps showing the thumbnail on top of the surface,
+    // so hover → load → play never flashes a black screen.
+    var previewReadyMessageId by remember { mutableStateOf<Long?>(null) }
+
+    // First-frame signal from the shared preview player (player is created on
+    // the main thread, so the callback also lands on main — safe to touch state).
+    DisposableEffect(previewPlayer) {
+        val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                previewReadyMessageId = previewingMessageId
+            }
+        }
+        previewPlayer.addListener(listener)
+        onDispose { previewPlayer.removeListener(listener) }
+    }
 
     LaunchedEffect(focusedMessageId) {
         // Any focus change: stop the previous preview first.
         previewPlayer.stop()
         previewingMessageId = null
         previewLoadingMessageId = null
+        previewReadyMessageId = null
         val id = focusedMessageId
         if (id == null) return@LaunchedEffect
         val item = items.firstOrNull { it.messageId == id } ?: return@LaunchedEffect
@@ -717,6 +735,7 @@ private fun MediaPane(
             gridItemsIndexed(items, key = { _, item -> item.messageId }) { index, item ->
                 val previewing = previewingMessageId == item.messageId
                 val previewLoading = previewLoadingMessageId == item.messageId
+                val previewReady = previewReadyMessageId == item.messageId
                 val onFocusChange: (Boolean) -> Unit = { focused ->
                     if (focused) focusedMessageId = item.messageId
                     else if (focusedMessageId == item.messageId) focusedMessageId = null
@@ -737,6 +756,7 @@ private fun MediaPane(
                             viewModel = viewModel,
                             previewing = previewing,
                             previewLoading = previewLoading,
+                            previewReady = previewReady,
                             previewPlayer = previewPlayer,
                             onFocusChange = onFocusChange,
                         )
@@ -754,6 +774,7 @@ private fun MediaPane(
                         viewModel = viewModel,
                         previewing = previewing,
                         previewLoading = previewLoading,
+                        previewReady = previewReady,
                         previewPlayer = previewPlayer,
                         onFocusChange = onFocusChange,
                     )
@@ -770,6 +791,7 @@ private fun SidebarMediaCard(
     viewModel: MainViewModel,
     previewing: Boolean = false,
     previewLoading: Boolean = false,
+    previewReady: Boolean = false,
     previewPlayer: ExoPlayer? = null,
     onFocusChange: (Boolean) -> Unit = {},
 ) {
@@ -785,7 +807,7 @@ private fun SidebarMediaCard(
     }
     Card(
         onClick = onClick,
-        scale = CardDefaults.scale(focusedScale = 1.2f),
+        scale = CardDefaults.scale(focusedScale = 1.10f),
         border = CardDefaults.border(
             Border.None,
             Border.None,
@@ -802,6 +824,20 @@ private fun SidebarMediaCard(
                     player = previewPlayer,
                     modifier = Modifier.fillMaxSize(),
                 )
+                // Keep the thumbnail on top until the player has rendered its
+                // first frame — the live surface only appears once there is
+                // actually something to show.
+                if (!previewReady && thumbState != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(ctx)
+                            .data(File(thumbState))
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = item.caption ?: "Media",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             } else if (thumbState != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(ctx)
@@ -835,11 +871,18 @@ private fun SidebarMediaCard(
                 }
             }
             if (item.type == MediaType.Video && !previewing) {
+                // No dark chip behind the loading spinner — it sits directly on
+                // the thumbnail. The idle play icon keeps its chip.
+                val badgeModifier = if (previewLoading) {
+                    Modifier
+                } else {
+                    Modifier.background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                }
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(8.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                        .then(badgeModifier)
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
                     if (previewLoading) {
