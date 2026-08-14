@@ -5,6 +5,7 @@ package tv.telegram.ui.chats
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -668,11 +669,12 @@ private fun MediaPane(
             // instead of replacing only the media pane.
             Dialog(
                 onDismissRequest = { openedIndex = null },
-                properties = DialogProperties(usePlatformDefaultWidth = false),
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                ),
             ) {
                 PhotoFullscreen(
                     item = items[idx],
-                    positionText = stringResource(R.string.photo_position, idx + 1, items.size),
                     hasPrev = idx > 0,
                     hasNext = idx < items.size - 1,
                     onPrev = { openedIndex = idx - 1 },
@@ -898,7 +900,6 @@ private fun SidebarMediaCard(
 @Composable
 private fun PhotoFullscreen(
     item: MediaItem,
-    positionText: String,
     hasPrev: Boolean,
     hasNext: Boolean,
     onPrev: () -> Unit,
@@ -908,16 +909,23 @@ private fun PhotoFullscreen(
 ) {
     BackHandler(enabled = true) { onBack() }
     val focusRequester = remember { FocusRequester() }
+    // Box must be focusable or onKeyEvent never fires; retry the focus
+    // request a few frames until the Dialog window is attached.
     LaunchedEffect(item.fileId) {
         withFrameNanos { }
-        try { focusRequester.requestFocus() }
-        catch (_: IllegalStateException) {}
+        repeat(5) {
+            try {
+                focusRequester.requestFocus()
+            } catch (_: IllegalStateException) {}
+            delay(60)
+        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .focusable()
             .focusRequester(focusRequester)
             .onKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
@@ -959,22 +967,6 @@ private fun PhotoFullscreen(
                 )
             }
         }
-        Text(
-            stringResource(R.string.photo_key_hint),
-            color = Color.White.copy(alpha = 0.7f),
-            fontSize = 14.sp,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(24.dp),
-        )
-        Text(
-            positionText,
-            color = Color.White.copy(alpha = 0.7f),
-            fontSize = 14.sp,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(24.dp),
-        )
         // Always-visible translucent arrows; hidden at the first/last edge.
         if (hasPrev) {
             Icon(
