@@ -3,6 +3,7 @@
 package tv.telegram.ui.chats
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -786,7 +787,9 @@ private fun SidebarMediaCard(
         onClick = onClick,
         scale = CardDefaults.scale(focusedScale = 1.10f),
         border = CardDefaults.border(
-            Border.None,
+            // Plan A: focus indicator = brand-blue inner border, immune to
+            // dark thumbnails blending into the dark background.
+            Border(BorderStroke(3.dp, Color(0xFF4A9EF5))),
             Border.None,
             Border.None,
         ),
