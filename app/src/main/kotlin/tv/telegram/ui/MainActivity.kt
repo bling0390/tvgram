@@ -8,7 +8,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -134,14 +133,10 @@ private fun AppNavHost(viewModel: MainViewModel) {
         }
     }
 
-    // Sidebar: expands (icon + label) while it holds focus, collapses to
-    // icon-only once focus moves to the content area. Width animates and the
-    // NavHost padding follows so content never gets covered.
-    var railExpanded by remember { mutableStateOf(false) }
-    val railWidth by animateDpAsState(
-        targetValue = if (railExpanded) 220.dp else 96.dp,
-        label = "railWidth",
-    )
+    // Sidebar is always icon-only: a fixed 96dp rail. No expand/collapse
+    // animation, so the NavHost padding never changes and the page never
+    // jumps when focus moves between the rail and the content area.
+    val railWidth = 96.dp
 
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
@@ -199,8 +194,6 @@ private fun AppNavHost(viewModel: MainViewModel) {
         if (inHome) {
             NavRail(
                 current = currentRoute,
-                expanded = railExpanded,
-                onExpandedChange = { railExpanded = it },
                 onSelect = { route ->
                     navController.navigate(route) {
                         popUpTo(Routes.HOME) { saveState = true }
@@ -222,8 +215,6 @@ private data class NavEntry(val route: String, val label: String, val icon: Imag
 @Composable
 private fun NavRail(
     current: String?,
-    expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -245,16 +236,14 @@ private fun NavRail(
     Column(
         modifier = modifier
             .background(Color(0xFF141414))
-            .onFocusChanged { onExpandedChange(it.hasFocus) }
             .padding(vertical = 24.dp, horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
-        horizontalAlignment = Alignment.Start,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         entries.forEachIndexed { idx, entry ->
             RailItem(
                 entry = entry,
                 selected = current == entry.route,
-                expanded = expanded,
                 onClick = { onSelect(entry.route) },
                 fr = if (idx == 0) railFocus else null,
             )
@@ -266,23 +255,14 @@ private fun NavRail(
 private fun RailItem(
     entry: NavEntry,
     selected: Boolean,
-    expanded: Boolean,
     onClick: () -> Unit,
     fr: FocusRequester? = null,
 ) {
-    val containerColor = when {
-        selected -> Color(0xFF2E3A48) // 比底色略亮的蓝灰胶囊背景（参照截图）
-        else -> Color.Transparent
-    }
-    // Collapsed (icon-only) rail item is a 52dp circle; expanded it
-    // becomes a full-width capsule with label. Icon stays at the same
-    // x-position (12dp from start) in both modes so it never shifts.
-    val itemShape = RoundedCornerShape(if (expanded) 50 else 26)
-    val itemModifier = if (expanded) {
-        Modifier.fillMaxWidth().height(52.dp)
-    } else {
-        Modifier.width(52.dp).height(52.dp)
-    }
+    var focused by remember { mutableStateOf(false) }
+    // Selected and focused items get a true CIRCLE background (CircleShape,
+    // not RoundedCornerShape percent — the old 26 was 26% which renders a
+    // rounded-rect on a 52dp card). Focus feedback = circle chip + brighter icon.
+    val containerColor = if (selected) Color(0xFF2E3A48) else Color.Transparent
     Card(
         onClick = onClick,
         scale = CardDefaults.scale(focusedScale = 1f),
@@ -291,41 +271,35 @@ private fun RailItem(
             focusedContainerColor = Color(0xFF3A4A5C),
         ),
         shape = CardDefaults.shape(
-            itemShape,
-            itemShape,
-            itemShape,
+            CircleShape,
+            CircleShape,
+            CircleShape,
         ),
         border = CardDefaults.border(
             Border.None,
             Border.None,
             Border.None,
         ),
-        modifier = itemModifier
+        modifier = Modifier
+            .width(52.dp)
+            .height(52.dp)
+            .onFocusChanged { focused = it.hasFocus }
             .let { if (fr != null) it.focusRequester(fr) else it },
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = 12.dp, end = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = entry.icon,
                 contentDescription = null,
-                tint = if (selected) Color(0xFF9BDCFE) else Color(0xFFB0B0B0),
+                tint = when {
+                    selected -> Color(0xFF9BDCFE)
+                    focused -> Color.White
+                    else -> Color(0xFFB0B0B0)
+                },
                 modifier = Modifier.size(26.dp),
             )
-            if (expanded) {
-                Text(
-                    text = entry.label,
-                    color = if (selected) Color.White else Color(0xFFB0B0B0),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
         }
     }
 }
