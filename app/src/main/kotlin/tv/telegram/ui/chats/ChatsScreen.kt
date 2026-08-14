@@ -785,12 +785,7 @@ private fun SidebarMediaCard(
     }
     Card(
         onClick = onClick,
-        scale = CardDefaults.scale(focusedScale = 1.08f),
-        glow = CardDefaults.glow(
-            Glow.None,
-            Glow(elevationColor = Color(0x554A9EF5), elevation = 16.dp),
-            Glow.None,
-        ),
+        scale = CardDefaults.scale(focusedScale = 1.2f),
         border = CardDefaults.border(
             Border.None,
             Border.None,
