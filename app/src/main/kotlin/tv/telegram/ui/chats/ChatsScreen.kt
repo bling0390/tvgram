@@ -789,7 +789,7 @@ private fun SidebarMediaCard(
             // NOTE: CardGlow order is (enabled, focused, pressed) — the glow
             // must go in slot #2 (focused) so only the focused card shows it.
             Glow.None,
-            Glow(elevationColor = Color.White.copy(alpha = 0.15f), elevation = 16.dp),
+            Glow(elevationColor = Color.White.copy(alpha = 0.15f), elevation = 6.dp),
             Glow.None,
         ),
         border = CardDefaults.border(
