@@ -4,6 +4,7 @@ package tv.telegram.ui.chats
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -320,7 +321,7 @@ private fun ArchiveEntry(
             containerColor = Color(0xFF2A2A2A),
             focusedContainerColor = MaterialTheme.colorScheme.secondary,
         ),
-        scale = CardDefaults.scale(focusedScale = 1f),
+        scale = CardDefaults.scale(focusedScale = 1.04f),
         border = CardDefaults.border(
             Border.None,
             Border.None,
@@ -373,7 +374,7 @@ private fun SidebarItem(
             containerColor = containerColor,
             focusedContainerColor = Color(0xFF3A4A5C),
         ),
-        scale = CardDefaults.scale(focusedScale = 1f),
+        scale = CardDefaults.scale(focusedScale = 1.04f),
         shape = CardDefaults.shape(
             RoundedCornerShape(50),
             RoundedCornerShape(50),
@@ -686,7 +687,7 @@ private fun SidebarMediaCard(
     }
     Card(
         onClick = onClick,
-        scale = CardDefaults.scale(focusedScale = 1f),
+        scale = CardDefaults.scale(focusedScale = 1.05f),
         border = CardDefaults.border(
             Border.None,
             Border.None,
