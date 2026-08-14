@@ -193,20 +193,6 @@ private fun ChatSidebar(
     }
 
     Column(modifier = modifier) {
-        Text(
-            if (viewingArchive) "Archived Chats" else stringResource(R.string.chats_title),
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            if (viewingArchive) "${chats.size} archived"
-                else stringResource(R.string.chats_subtitle, chats.size),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
-        )
-        Spacer(Modifier.height(12.dp))
         if (error != null) {
             ChatListError(
                 error = error,
