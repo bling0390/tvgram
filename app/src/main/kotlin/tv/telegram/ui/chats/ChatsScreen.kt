@@ -786,10 +786,10 @@ private fun SidebarMediaCard(
         onClick = onClick,
         scale = CardDefaults.scale(focusedScale = 1.10f),
         glow = CardDefaults.glow(
-            // White focus glow, focused state only — subtle halo so dark
-            // thumbnails still read as focused against the dark background.
-            Glow(elevationColor = Color.White.copy(alpha = 0.15f), elevation = 16.dp),
+            // NOTE: CardGlow order is (enabled, focused, pressed) — the glow
+            // must go in slot #2 (focused) so only the focused card shows it.
             Glow.None,
+            Glow(elevationColor = Color.White.copy(alpha = 0.15f), elevation = 16.dp),
             Glow.None,
         ),
         border = CardDefaults.border(
