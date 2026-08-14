@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -235,11 +236,7 @@ fun PlayerScreen(
     ) {
         if (currentPath == null || !mediaPrepared) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    stringResource(R.string.player_loading),
-                    color = Color.White,
-                    fontSize = 18.sp,
-                )
+                CircularProgressIndicator(color = Color.White)
             }
         } else {
             PlayerSurface(
