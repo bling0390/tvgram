@@ -321,7 +321,7 @@ private fun ArchiveEntry(
             containerColor = Color(0xFF2A2A2A),
             focusedContainerColor = MaterialTheme.colorScheme.secondary,
         ),
-        scale = CardDefaults.scale(focusedScale = 1.04f),
+        scale = CardDefaults.scale(focusedScale = 1f),
         border = CardDefaults.border(
             Border.None,
             Border.None,
@@ -374,7 +374,7 @@ private fun SidebarItem(
             containerColor = containerColor,
             focusedContainerColor = Color(0xFF3A4A5C),
         ),
-        scale = CardDefaults.scale(focusedScale = 1.04f),
+        scale = CardDefaults.scale(focusedScale = 1f),
         shape = CardDefaults.shape(
             RoundedCornerShape(50),
             RoundedCornerShape(50),
