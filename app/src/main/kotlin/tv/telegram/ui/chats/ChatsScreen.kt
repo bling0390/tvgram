@@ -945,7 +945,10 @@ private fun PhotoFullscreen(
                     stringResource(R.string.error_prefix, error ?: ""),
                     color = Color.White,
                 )
-                localPath == null -> Text(stringResource(R.string.photo_loading), color = Color.White)
+                localPath == null -> CircularProgressIndicator(
+                    color = Color.White,
+                    strokeWidth = 3.dp,
+                )
                 else -> AsyncImage(
                     model = ImageRequest.Builder(ctx).data(File(localPath!!)).build(),
                     contentDescription = item.caption,
