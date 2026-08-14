@@ -29,6 +29,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Verified
@@ -973,5 +975,28 @@ private fun PhotoFullscreen(
                 .align(Alignment.TopEnd)
                 .padding(24.dp),
         )
+        // Always-visible translucent arrows; hidden at the first/last edge.
+        if (hasPrev) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowLeft,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 32.dp)
+                    .size(48.dp),
+            )
+        }
+        if (hasNext) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowRight,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 32.dp)
+                    .size(48.dp),
+            )
+        }
     }
 }
