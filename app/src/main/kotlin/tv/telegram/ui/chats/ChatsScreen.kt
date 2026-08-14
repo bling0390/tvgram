@@ -788,7 +788,7 @@ private fun SidebarMediaCard(
         glow = CardDefaults.glow(
             // White focus glow, focused state only — subtle halo so dark
             // thumbnails still read as focused against the dark background.
-            Glow(elevationColor = Color.White.copy(alpha = 0.075f), elevation = 16.dp),
+            Glow(elevationColor = Color.White.copy(alpha = 0.15f), elevation = 16.dp),
             Glow.None,
             Glow.None,
         ),
