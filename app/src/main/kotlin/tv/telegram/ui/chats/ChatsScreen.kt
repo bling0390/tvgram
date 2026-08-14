@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -87,6 +88,7 @@ import tv.telegram.ui.MainViewModel
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.Glow
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import java.io.File
@@ -691,6 +693,9 @@ private fun MediaPane(
             columns = GridCells.Fixed(3),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
+            // Top/bottom padding gives the 8% focus-scale room to expand
+            // without clipping the first/last row against the viewport.
+            contentPadding = PaddingValues(vertical = 20.dp),
             modifier = Modifier
                 .fillMaxSize()
                 .onKeyEvent { ev ->
@@ -770,7 +775,12 @@ private fun SidebarMediaCard(
     }
     Card(
         onClick = onClick,
-        scale = CardDefaults.scale(focusedScale = 1.05f),
+        scale = CardDefaults.scale(focusedScale = 1.08f),
+        glow = CardDefaults.glow(
+            Glow.None,
+            Glow(elevationColor = Color(0x554A9EF5), elevation = 16.dp),
+            Glow.None,
+        ),
         border = CardDefaults.border(
             Border.None,
             Border.None,
