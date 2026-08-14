@@ -136,7 +136,7 @@ private fun AppNavHost(viewModel: MainViewModel) {
     // Sidebar is always icon-only: a fixed 96dp rail. No expand/collapse
     // animation, so the NavHost padding never changes and the page never
     // jumps when focus moves between the rail and the content area.
-    val railWidth = 96.dp
+    val railWidth = 84.dp
 
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
@@ -236,8 +236,8 @@ private fun NavRail(
     Column(
         modifier = modifier
             .background(Color(0xFF141414))
-            .padding(vertical = 24.dp, horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(vertical = 24.dp, horizontal = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         entries.forEachIndexed { idx, entry ->
@@ -281,8 +281,8 @@ private fun RailItem(
             Border.None,
         ),
         modifier = Modifier
-            .width(52.dp)
-            .height(52.dp)
+            .width(48.dp)
+            .height(48.dp)
             .onFocusChanged { focused = it.hasFocus }
             .let { if (fr != null) it.focusRequester(fr) else it },
     ) {
@@ -298,7 +298,7 @@ private fun RailItem(
                     focused -> Color.White
                     else -> Color(0xFFB0B0B0)
                 },
-                modifier = Modifier.size(26.dp),
+                modifier = Modifier.size(24.dp),
             )
         }
     }
