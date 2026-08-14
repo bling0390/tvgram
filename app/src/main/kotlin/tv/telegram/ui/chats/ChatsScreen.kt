@@ -849,28 +849,22 @@ private fun SidebarMediaCard(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
+                // Thumbnail not downloaded yet — show a centered spinner
+                // instead of the old "Photo"/"Video" placeholder.
                 Box(
                     modifier = Modifier.fillMaxSize().background(Color(0xFF202020)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (item.type == MediaType.Video) {
-                            Icon(
-                                Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(22.dp),
-                            )
-                            Spacer(Modifier.width(6.dp))
-                        }
-                        Text(
-                            if (item.type == MediaType.Video) "Video" else "Photo",
-                            color = Color.White.copy(alpha = 0.7f),
-                        )
-                    }
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        strokeWidth = 3.dp,
+                        color = Color.White.copy(alpha = 0.7f),
+                    )
                 }
             }
-            if (item.type == MediaType.Video && !previewing) {
+            // Bottom-right badge only when the thumbnail is ready — no point
+            // showing the play chip over a spinner.
+            if (item.type == MediaType.Video && !previewing && thumbState != null) {
                 // No dark chip behind the loading spinner — it sits directly on
                 // the thumbnail. The idle play icon keeps its chip.
                 val badgeModifier = if (previewLoading) {
