@@ -137,10 +137,10 @@ fun ChatsScreen(
             onShowMain = { viewModel.setViewingArchive(false) },
             viewModel = viewModel,
             modifier = Modifier
-                .width(320.dp)
+                .width(296.dp)
                 .fillMaxHeight()
                 .background(Color(0xFF161616))
-                .padding(vertical = 16.dp, horizontal = 12.dp),
+                .padding(vertical = 16.dp, horizontal = 8.dp),
         )
 
         Box(
@@ -411,7 +411,7 @@ private fun SidebarItem(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         chat.title,
-                        color = if (selected) Color.White else Color(0xFFD0D0D0),
+                        color = if (selected) Color(0xFF9BDCFE) else Color(0xFFD0D0D0),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
@@ -433,7 +433,7 @@ private fun SidebarItem(
                         Icon(
                             imageVector = typeIcon,
                             contentDescription = null,
-                            tint = if (selected) Color.White.copy(alpha = 0.8f) else Color(0xFF909090),
+                            tint = if (selected) Color(0xFF9BDCFE) else Color(0xFF909090),
                             modifier = Modifier.size(11.dp),
                         )
                     }
@@ -442,7 +442,7 @@ private fun SidebarItem(
                         Icon(
                             imageVector = Icons.Default.VolumeOff,
                             contentDescription = null,
-                            tint = if (selected) Color.White.copy(alpha = 0.7f) else Color(0xFF808080),
+                            tint = if (selected) Color(0xFF9BDCFE) else Color(0xFF808080),
                             modifier = Modifier.size(10.dp),
                         )
                     }
@@ -473,7 +473,7 @@ private fun SidebarItem(
                         // Empty string keeps the row height stable when the last
                         // message is not photo/video, so the title never shifts.
                         text = chat.lastMessageText ?: "",
-                        color = if (selected) Color.White.copy(alpha = 0.85f) else Color(0xFF909090),
+                        color = if (selected) Color(0xFF9BDCFE).copy(alpha = 0.85f) else Color(0xFF909090),
                         fontSize = 11.sp,
                         maxLines = 1,
                     )
