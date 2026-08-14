@@ -565,6 +565,11 @@ private fun MediaPane(
 ) {
 
     var openedIndex by rememberSaveable { mutableStateOf<Int?>(null) }
+    // True while focus sits on a card in the grid's first row (index < 3).
+    // When it does, DirectionUp is consumed so focus stays in the media
+    // grid instead of jumping to the chats list (Compose's global focus
+    // search). Left key remains the deliberate path back to the sidebar.
+    var firstRowFocused by remember { mutableStateOf(false) }
 
     val gridState = rememberLazyGridState()
 
@@ -650,20 +655,48 @@ private fun MediaPane(
             columns = GridCells.Fixed(3),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .onKeyEvent { ev ->
+                    // Only when focus is on a first-row card is there no
+                    // upward candidate; consume so focus stays put.
+                    if (ev.type == KeyEventType.KeyDown && ev.key == Key.DirectionUp && firstRowFocused) {
+                        true
+                    } else {
+                        false
+                    }
+                },
         ) {
             gridItemsIndexed(items, key = { _, item -> item.messageId }) { index, item ->
-                SidebarMediaCard(
-                    item = item,
-                    onClick = {
-                        if (item.type == MediaType.Video) {
-                            onOpenPlayer(index)
-                        } else {
-                            openedIndex = index
-                        }
-                    },
-                    viewModel = viewModel,
-                )
+                if (index < 3) {
+                    // Track focus on first-row cards so DirectionUp at the top
+                    // of the grid is consumed (see onKeyEvent above).
+                    Box(Modifier.onFocusChanged { firstRowFocused = it.hasFocus }) {
+                        SidebarMediaCard(
+                            item = item,
+                            onClick = {
+                                if (item.type == MediaType.Video) {
+                                    onOpenPlayer(index)
+                                } else {
+                                    openedIndex = index
+                                }
+                            },
+                            viewModel = viewModel,
+                        )
+                    }
+                } else {
+                    SidebarMediaCard(
+                        item = item,
+                        onClick = {
+                            if (item.type == MediaType.Video) {
+                                onOpenPlayer(index)
+                            } else {
+                                openedIndex = index
+                            }
+                        },
+                        viewModel = viewModel,
+                    )
+                }
             }
         }
     }
