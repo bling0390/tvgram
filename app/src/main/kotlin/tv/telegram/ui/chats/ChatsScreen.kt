@@ -108,7 +108,6 @@ fun ChatsScreen(
     val selectedChatId by viewModel.sidebarSelectedChatId.collectAsStateWithLifecycle()
     val mediaItems by viewModel.mediaItems.collectAsStateWithLifecycle()
     val mediaLoaded by viewModel.mediaLoaded.collectAsStateWithLifecycle()
-    val currentChatTitle by viewModel.currentChatTitle.collectAsStateWithLifecycle()
 
     // Toast 即时提醒：聊天列表加载失败时弹一次
     val context = LocalContext.current
@@ -150,7 +149,6 @@ fun ChatsScreen(
                 EmptyMediaPane(modifier = Modifier.fillMaxSize())
             } else {
                 MediaPane(
-                    title = currentChatTitle,
                     items = mediaItems,
                     loaded = mediaLoaded,
                     onOpenPlayer = onOpenPlayer,
@@ -565,7 +563,6 @@ private fun EmptyMediaPane(modifier: Modifier = Modifier) {
 
 @Composable
 private fun MediaPane(
-    title: String?,
     items: List<MediaItem>,
     loaded: Boolean,
     onOpenPlayer: (Int) -> Unit,
@@ -679,26 +676,6 @@ private fun MediaPane(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = title ?: "Chat",
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(4.dp))
-        if (loaded) {
-            Text(
-                text = stringResource(R.string.chats_media_count, items.size),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 14.sp,
-            )
-        } else {
-            CircularProgressIndicator(
-                modifier = Modifier.size(14.dp),
-                strokeWidth = 2.dp,
-            )
-        }
-        Spacer(Modifier.height(16.dp))
         if (items.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 if (loaded) {

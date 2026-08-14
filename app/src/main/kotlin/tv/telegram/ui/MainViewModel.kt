@@ -94,12 +94,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val mediaExhausted = mediaRepo.exhausted
     val currentChatId = mediaRepo.currentChatId
 
-    private val _chatTitles = MutableStateFlow<Map<Long, String>>(emptyMap())
-    val chatTitles: StateFlow<Map<Long, String>> = _chatTitles.asStateFlow()
-
-    private val _currentChatTitle = MutableStateFlow<String?>(null)
-    val currentChatTitle: StateFlow<String?> = _currentChatTitle.asStateFlow()
-
     private val _playerPlaybackSpeed = MutableStateFlow(1.0f)
     val playerPlaybackSpeed: StateFlow<Float> = _playerPlaybackSpeed.asStateFlow()
 
@@ -197,18 +191,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
 
-        viewModelScope.launch {
-            chatRepo.items.collect { items ->
-                _chatTitles.value = items.associate { it.id to it.title }
-            }
-        }
-
-        viewModelScope.launch {
-            mediaRepo.currentChatId.collect { id ->
-                _currentChatTitle.value = id?.let { _chatTitles.value[it] }
-            }
-        }
-
         val (theme, lang) = SettingsRepository.hydrate(getApplication())
         _themeMode.value = theme
         _language.value = lang
@@ -294,6 +276,4 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Download only the first chunk of a file — enough for a hover preview. */
     suspend fun ensurePreviewFile(fileId: Int): String? = fileRepo.ensurePreview(fileId)
-
-    fun currentChatTitle(id: Long): String? = _chatTitles.value[id]
 }

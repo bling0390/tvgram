@@ -33,7 +33,6 @@
     <string name="chats_empty">No chats yet</string>
     <string name="chats_select_prompt">←  Select a chat</string>
     <string name="chats_select_detail">Pick a conversation from the sidebar to see its photos and videos.</string>
-    <string name="chats_media_count">%1$d media items</string>
     <string name="chats_media_loading">Loading media…</string>
     <string name="chats_media_empty">No photos or videos in this chat</string>
 
