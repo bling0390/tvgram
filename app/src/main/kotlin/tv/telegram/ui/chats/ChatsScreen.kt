@@ -340,7 +340,7 @@ private fun ArchiveEntry(
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(48.dp)
             .let { if (fr != null) it.focusRequester(fr) else it },
     ) {
         Row(
