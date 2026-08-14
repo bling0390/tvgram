@@ -590,19 +590,25 @@ private fun MediaPane(
     }
     var focusedMessageId by remember { mutableStateOf<Long?>(null) }
     var previewingMessageId by remember { mutableStateOf<Long?>(null) }
+    // Set while the preview file is being downloaded (before playback starts),
+    // so the card can show a loading spinner in place of the play icon.
+    var previewLoadingMessageId by remember { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(focusedMessageId) {
         // Any focus change: stop the previous preview first.
         previewPlayer.stop()
         previewingMessageId = null
+        previewLoadingMessageId = null
         val id = focusedMessageId
         if (id == null) return@LaunchedEffect
         val item = items.firstOrNull { it.messageId == id } ?: return@LaunchedEffect
         if (item.type != MediaType.Video) return@LaunchedEffect
         delay(2500)
         if (focusedMessageId != id) return@LaunchedEffect // focus moved away
-        val path = viewModel.ensurePreviewFile(item.fileId) ?: return@LaunchedEffect
-        if (focusedMessageId != id) return@LaunchedEffect
+        previewLoadingMessageId = id
+        val path = viewModel.ensurePreviewFile(item.fileId)
+        previewLoadingMessageId = null
+        if (path == null || focusedMessageId != id) return@LaunchedEffect
         previewingMessageId = id
         previewPlayer.setMediaItem(ExoMediaItem.fromUri("file://$path"))
         previewPlayer.prepare()
@@ -710,6 +716,7 @@ private fun MediaPane(
         ) {
             gridItemsIndexed(items, key = { _, item -> item.messageId }) { index, item ->
                 val previewing = previewingMessageId == item.messageId
+                val previewLoading = previewLoadingMessageId == item.messageId
                 val onFocusChange: (Boolean) -> Unit = { focused ->
                     if (focused) focusedMessageId = item.messageId
                     else if (focusedMessageId == item.messageId) focusedMessageId = null
@@ -729,6 +736,7 @@ private fun MediaPane(
                             },
                             viewModel = viewModel,
                             previewing = previewing,
+                            previewLoading = previewLoading,
                             previewPlayer = previewPlayer,
                             onFocusChange = onFocusChange,
                         )
@@ -745,6 +753,7 @@ private fun MediaPane(
                         },
                         viewModel = viewModel,
                         previewing = previewing,
+                        previewLoading = previewLoading,
                         previewPlayer = previewPlayer,
                         onFocusChange = onFocusChange,
                     )
@@ -760,6 +769,7 @@ private fun SidebarMediaCard(
     onClick: () -> Unit,
     viewModel: MainViewModel,
     previewing: Boolean = false,
+    previewLoading: Boolean = false,
     previewPlayer: ExoPlayer? = null,
     onFocusChange: (Boolean) -> Unit = {},
 ) {
@@ -829,7 +839,7 @@ private fun SidebarMediaCard(
                     }
                 }
             }
-            if (item.type == MediaType.Video) {
+            if (item.type == MediaType.Video && !previewing) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -837,12 +847,20 @@ private fun SidebarMediaCard(
                         .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
-                    Icon(
-                        Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp),
-                    )
+                    if (previewLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White,
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
                 }
             }
         }
