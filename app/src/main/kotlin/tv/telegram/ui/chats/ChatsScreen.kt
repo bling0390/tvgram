@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.NorthWest
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Verified
@@ -228,6 +229,7 @@ private fun ChatSidebar(
                     Box(Modifier.onFocusChanged { firstItemFocused = it.hasFocus }) {
                         ArchiveEntry(
                             label = "Back to Chats",
+                            icon = Icons.Default.NorthWest,
                             onClick = onShowMain,
                             fr = firstFocus,
                         )
