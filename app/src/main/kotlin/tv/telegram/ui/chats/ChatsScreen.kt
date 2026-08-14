@@ -68,6 +68,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.widget.Toast
 import coil.compose.AsyncImage
@@ -659,16 +661,24 @@ private fun MediaPane(
     if (openedIndex != null) {
         val idx = openedIndex!!
         if (idx in items.indices) {
-            PhotoFullscreen(
-                item = items[idx],
-                positionText = stringResource(R.string.photo_position, idx + 1, items.size),
-                hasPrev = idx > 0,
-                hasNext = idx < items.size - 1,
-                onPrev = { openedIndex = idx - 1 },
-                onNext = { openedIndex = idx + 1 },
-                onBack = { openedIndex = null },
-                viewModel = viewModel,
-            )
+            // True fullscreen photo viewer: a dedicated Dialog window that
+            // covers the whole screen (NavRail + chat sidebar included),
+            // instead of replacing only the media pane.
+            Dialog(
+                onDismissRequest = { openedIndex = null },
+                properties = DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                PhotoFullscreen(
+                    item = items[idx],
+                    positionText = stringResource(R.string.photo_position, idx + 1, items.size),
+                    hasPrev = idx > 0,
+                    hasNext = idx < items.size - 1,
+                    onPrev = { openedIndex = idx - 1 },
+                    onNext = { openedIndex = idx + 1 },
+                    onBack = { openedIndex = null },
+                    viewModel = viewModel,
+                )
+            }
         } else {
             openedIndex = null
         }
