@@ -292,5 +292,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { fileRepo.ensureLocal(fileId, priority) }
     }
 
+    /** Download only the first chunk of a file — enough for a hover preview. */
+    suspend fun ensurePreviewFile(fileId: Int): String? = fileRepo.ensurePreview(fileId)
+
     fun currentChatTitle(id: Long): String? = _chatTitles.value[id]
 }

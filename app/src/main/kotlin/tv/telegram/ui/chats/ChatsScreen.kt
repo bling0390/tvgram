@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -70,6 +71,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.widget.Toast
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import androidx.media3.common.MediaItem as ExoMediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.compose.PlayerSurface
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import tv.telegram.R
@@ -571,6 +576,37 @@ private fun MediaPane(
     // search). Left key remains the deliberate path back to the sidebar.
     var firstRowFocused by remember { mutableStateOf(false) }
 
+    // Hover preview: one shared muted ExoPlayer reused across all cards.
+    // Focus on a video card for 2.5s → play the first chunk of the file
+    // inline; losing focus stops it and restores the thumbnail.
+    val context = LocalContext.current
+    val previewPlayer = remember {
+        ExoPlayer.Builder(context).build().apply { volume = 0f }
+    }
+    DisposableEffect(Unit) {
+        onDispose { previewPlayer.release() }
+    }
+    var focusedMessageId by remember { mutableStateOf<Long?>(null) }
+    var previewingMessageId by remember { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(focusedMessageId) {
+        // Any focus change: stop the previous preview first.
+        previewPlayer.stop()
+        previewingMessageId = null
+        val id = focusedMessageId
+        if (id == null) return@LaunchedEffect
+        val item = items.firstOrNull { it.messageId == id } ?: return@LaunchedEffect
+        if (item.type != MediaType.Video) return@LaunchedEffect
+        delay(2500)
+        if (focusedMessageId != id) return@LaunchedEffect // focus moved away
+        val path = viewModel.ensurePreviewFile(item.fileId) ?: return@LaunchedEffect
+        if (focusedMessageId != id) return@LaunchedEffect
+        previewingMessageId = id
+        previewPlayer.setMediaItem(ExoMediaItem.fromUri("file://$path"))
+        previewPlayer.prepare()
+        previewPlayer.play()
+    }
+
     val gridState = rememberLazyGridState()
 
     val nearEnd by remember {
@@ -668,6 +704,11 @@ private fun MediaPane(
                 },
         ) {
             gridItemsIndexed(items, key = { _, item -> item.messageId }) { index, item ->
+                val previewing = previewingMessageId == item.messageId
+                val onFocusChange: (Boolean) -> Unit = { focused ->
+                    if (focused) focusedMessageId = item.messageId
+                    else if (focusedMessageId == item.messageId) focusedMessageId = null
+                }
                 if (index < 3) {
                     // Track focus on first-row cards so DirectionUp at the top
                     // of the grid is consumed (see onKeyEvent above).
@@ -682,6 +723,9 @@ private fun MediaPane(
                                 }
                             },
                             viewModel = viewModel,
+                            previewing = previewing,
+                            previewPlayer = previewPlayer,
+                            onFocusChange = onFocusChange,
                         )
                     }
                 } else {
@@ -695,6 +739,9 @@ private fun MediaPane(
                             }
                         },
                         viewModel = viewModel,
+                        previewing = previewing,
+                        previewPlayer = previewPlayer,
+                        onFocusChange = onFocusChange,
                     )
                 }
             }
@@ -707,6 +754,9 @@ private fun SidebarMediaCard(
     item: MediaItem,
     onClick: () -> Unit,
     viewModel: MainViewModel,
+    previewing: Boolean = false,
+    previewPlayer: ExoPlayer? = null,
+    onFocusChange: (Boolean) -> Unit = {},
 ) {
     val ctx = LocalContext.current
     val thumbId = item.thumbnailFileId
@@ -728,10 +778,16 @@ private fun SidebarMediaCard(
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(16f / 10f),
+            .aspectRatio(16f / 10f)
+            .onFocusChanged { onFocusChange(it.hasFocus) },
     ) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-            if (thumbState != null) {
+            if (previewing && previewPlayer != null) {
+                PlayerSurface(
+                    player = previewPlayer,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else if (thumbState != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(ctx)
                         .data(File(thumbState))

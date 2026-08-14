@@ -29,6 +29,12 @@ class TdFileRepository(
     val states: StateFlow<Map<Int, FileDownloadState>> = _states.asStateFlow()
 
     private val pendingDownloads = ConcurrentHashMap<Int, CompletableDeferred<String>>()
+    private val previewDownloads = ConcurrentHashMap<Int, PreviewRequest>()
+
+    private data class PreviewRequest(
+        val deferred: CompletableDeferred<String>,
+        val limitBytes: Int,
+    )
 
     init {
         scope.launch {
@@ -49,7 +55,16 @@ class TdFileRepository(
         if (local.isDownloadingCompleted && local.path.isNotEmpty()) {
             val d = pendingDownloads.remove(fileId)
             d?.complete(local.path)
+            val pr = previewDownloads.remove(fileId)
+            pr?.deferred?.complete(local.path)
             _states.value = _states.value + (fileId to FileDownloadState.Local(local.path))
+        } else {
+            // Preview download: complete as soon as we have the requested prefix.
+            val pr = previewDownloads[fileId]
+            if (pr != null && local.path.isNotEmpty() && local.downloadedSize >= pr.limitBytes) {
+                previewDownloads.remove(fileId)
+                pr.deferred.complete(local.path)
+            }
         }
     }
 
@@ -91,6 +106,44 @@ class TdFileRepository(
             _states.value = _states.value + (fileId to FileDownloadState.Failed("exception: ${e.javaClass.simpleName}"))
             null
         }
+    }
+
+    /**
+     * Download only the first [limitBytes] of a file — enough to start a
+     * muted hover-preview without waiting for the full video. Never marks
+     * the file as fully Local (a later ensureLocal re-downloads the rest).
+     */
+    suspend fun ensurePreview(
+        fileId: Int,
+        limitBytes: Int = 2 * 1024 * 1024,
+        priority: Int = 32,
+        timeoutMs: Long = 20_000L,
+    ): String? {
+        val current = _states.value[fileId]
+        if (current is FileDownloadState.Local) return current.path
+
+        // Already have enough bytes on disk? Use them.
+        val fileObj = client.execute(TdApi.GetFile(fileId), timeoutMs = 5_000L)
+        if (fileObj is TdApi.File) {
+            val local = fileObj.local
+            if (local.path.isNotEmpty() &&
+                (local.isDownloadingCompleted || local.downloadedSize >= limitBytes)
+            ) {
+                return local.path
+            }
+        }
+
+        val deferred = CompletableDeferred<String>()
+        previewDownloads[fileId] = PreviewRequest(deferred, limitBytes)
+        client.send(TdApi.DownloadFile(fileId, priority, 0, limitBytes, false))
+
+        val path = withTimeoutOrNull(timeoutMs) {
+            try { deferred.await() } catch (_: Throwable) { null }
+        }
+        if (path == null) {
+            previewDownloads.remove(fileId)
+        }
+        return path
     }
 
     fun stateFor(fileId: Int): FileDownloadState? = _states.value[fileId]
