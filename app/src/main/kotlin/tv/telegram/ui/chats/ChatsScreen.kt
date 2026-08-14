@@ -398,21 +398,21 @@ private fun SidebarItem(
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height(48.dp)
             .let { if (fr != null) it.focusRequester(fr) else it },
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AvatarPlaceholder(chat = chat, viewModel = viewModel)
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         chat.title,
                         color = if (selected) Color.White else Color(0xFFD0D0D0),
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -424,7 +424,7 @@ private fun SidebarItem(
                             imageVector = Icons.Default.Verified,
                             contentDescription = null,
                             tint = Color(0xFF4A9EF5),
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(12.dp),
                         )
                     }
                     val typeIcon = chat.type.typeIcon()
@@ -434,7 +434,7 @@ private fun SidebarItem(
                             imageVector = typeIcon,
                             contentDescription = null,
                             tint = if (selected) Color.White.copy(alpha = 0.8f) else Color(0xFF909090),
-                            modifier = Modifier.size(13.dp),
+                            modifier = Modifier.size(11.dp),
                         )
                     }
                     if (chat.isMuted) {
@@ -443,11 +443,11 @@ private fun SidebarItem(
                             imageVector = Icons.Default.VolumeOff,
                             contentDescription = null,
                             tint = if (selected) Color.White.copy(alpha = 0.7f) else Color(0xFF808080),
-                            modifier = Modifier.size(12.dp),
+                            modifier = Modifier.size(10.dp),
                         )
                     }
                 }
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(1.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val thumbId = chat.lastMessageThumbFileId
                     val thumbState = if (thumbId != null) {
@@ -464,17 +464,17 @@ private fun SidebarItem(
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
-                                .size(18.dp)
-                                .clip(RoundedCornerShape(4.dp)),
+                                .size(14.dp)
+                                .clip(RoundedCornerShape(3.dp)),
                         )
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(5.dp))
                     }
                     Text(
                         // Empty string keeps the row height stable when the last
                         // message is not photo/video, so the title never shifts.
                         text = chat.lastMessageText ?: "",
                         color = if (selected) Color.White.copy(alpha = 0.85f) else Color(0xFF909090),
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         maxLines = 1,
                     )
                 }
@@ -508,8 +508,8 @@ private fun AvatarPlaceholder(chat: ChatItem, viewModel: MainViewModel) {
     val initial = chat.title.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
     Box(
         modifier = Modifier
-            .size(44.dp)
-            .background(color, RoundedCornerShape(22.dp))
+            .size(32.dp)
+            .background(color, RoundedCornerShape(16.dp))
             .padding(0.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -520,12 +520,12 @@ private fun AvatarPlaceholder(chat: ChatItem, viewModel: MainViewModel) {
                 contentScale = ContentScale.Crop,
                 onError = { imageFailed = true },
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(color, RoundedCornerShape(22.dp)),
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(color, RoundedCornerShape(16.dp)),
             )
         } else {
-            Text(initial, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(initial, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
