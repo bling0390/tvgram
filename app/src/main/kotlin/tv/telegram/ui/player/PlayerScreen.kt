@@ -49,10 +49,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -578,18 +582,27 @@ private fun ProgressBar(
         modifier = Modifier
             .fillMaxWidth()
             .height(barHeight)
-            .then(
+            .drawBehind {
                 if (isFocused) {
-                    // High-intensity white glow while focused, hugging the bar.
-                    Modifier.shadow(
-                        elevation = 24.dp,
-                        shape = RoundedCornerShape(4.dp),
-                        ambientColor = Color.White.copy(alpha = 0.85f),
-                        spotColor = Color.White.copy(alpha = 0.85f),
-                        clip = false,
+                    // High-intensity white glow drawn directly — colored
+                    // Modifier.shadow doesn't render on many TV GPUs.
+                    val r = 4.dp.toPx()
+                    val layers = listOf(
+                        10.dp to 0.22f,
+                        6.dp to 0.38f,
+                        3.dp to 0.58f,
                     )
-                } else Modifier,
-            )
+                    for ((expand, alpha) in layers) {
+                        val e = expand.toPx()
+                        drawRoundRect(
+                            color = Color.White.copy(alpha = alpha),
+                            topLeft = Offset(-e, -e),
+                            size = Size(size.width + e * 2, size.height + e * 2),
+                            cornerRadius = CornerRadius(r + e, r + e),
+                        )
+                    }
+                }
+            }
             .focusRequester(focusRequester)
             .focusable()
             .onFocusChanged {
@@ -654,17 +667,24 @@ private fun ControllerButton(
     Box(
         modifier = modifier
             .size(48.dp)
-            .then(
+            .drawBehind {
                 if (isFocused || isPressed) {
-                    Modifier.shadow(
-                        elevation = 24.dp,
-                        shape = CircleShape,
-                        ambientColor = Color.White.copy(alpha = 0.85f),
-                        spotColor = Color.White.copy(alpha = 0.85f),
-                        clip = false,
+                    // High-intensity white glow drawn directly (colored
+                    // Modifier.shadow doesn't render on many TV GPUs).
+                    val base = 24.dp.toPx()
+                    val layers = listOf(
+                        14.dp to 0.22f,
+                        8.dp to 0.38f,
+                        4.dp to 0.58f,
                     )
-                } else Modifier,
-            )
+                    for ((expand, alpha) in layers) {
+                        drawCircle(
+                            color = Color.White.copy(alpha = alpha),
+                            radius = base + expand.toPx(),
+                        )
+                    }
+                }
+            }
             .background(Color.White.copy(alpha = bgAlpha), CircleShape)
             .focusable(interactionSource = interactionSource)
             .clickable(
