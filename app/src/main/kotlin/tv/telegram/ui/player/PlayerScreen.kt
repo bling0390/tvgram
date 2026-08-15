@@ -51,7 +51,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -571,19 +570,20 @@ private fun ProgressBar(
     onInteraction: () -> Unit,
 ) {
     val pct = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    var isFocused by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
     // Focus feedback via height: 6dp idle -> 12dp focused (no glow).
     val barHeight = if (isFocused) 12.dp else 6.dp
+    // Report focus state for auto-hide logic.
+    LaunchedEffect(isFocused) {
+        onProgressFocusChange(isFocused)
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(barHeight)
             .focusRequester(focusRequester)
-            .focusable()
-            .onFocusChanged {
-                isFocused = it.isFocused
-                onProgressFocusChange(it.isFocused)
-            }
+            .focusable(interactionSource = interactionSource)
             .onKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (ev.key) {
