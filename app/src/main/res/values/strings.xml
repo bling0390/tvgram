@@ -44,7 +44,6 @@
     <!-- Player screen -->
     <string name="player_loading">Loading video…</string>
     <string name="player_position">%1$s / %2$s</string>
-    <string name="player_key_hint">←  Back  ·  ◀ ▶  ±10s  ·  OK  Play/Pause  ·  Menu  Speed (%1$.2fx)</string>
     <string name="player_btn_play">Play</string>
     <string name="player_btn_pause">Pause</string>
     <string name="player_btn_seek_back">◀◀ 10s</string>

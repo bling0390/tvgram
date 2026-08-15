@@ -245,15 +245,6 @@ fun PlayerScreen(
             )
         }
 
-        Text(
-            text = stringResource(R.string.player_key_hint, speed),
-            color = Color.White.copy(alpha = 0.45f),
-            fontSize = 12.sp,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 16.dp),
-        )
-
         AnimatedVisibility(
             visible = showController,
             enter = fadeIn(),

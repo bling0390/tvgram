@@ -41,7 +41,6 @@
 
     <string name="player_loading">正在加载视频…</string>
     <string name="player_position">%1$s / %2$s</string>
-    <string name="player_key_hint">←  返回  ·  ◀ ▶  ±10 秒  ·  OK  播放/暂停  ·  Menu  倍速 (%1$.2fx)</string>
     <string name="player_btn_play">播放</string>
     <string name="player_btn_pause">暂停</string>
     <string name="player_btn_seek_back">◀◀ 10 秒</string>
