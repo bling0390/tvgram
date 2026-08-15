@@ -182,23 +182,29 @@ fun PlayerScreen(
     var showController by remember { mutableStateOf(false) }
     var lastInteractionMs by remember { mutableStateOf(System.currentTimeMillis()) }
     var controllerShownBefore by remember { mutableStateOf(false) }
-    // Auto-hide after 4s of inactivity — lastInteractionMs is a key, so any
-    // bump (button press / progress seek) restarts the timer. Also handles
-    // focus handover: reveal → progress bar (after enter composes); hide →
-    // page Box (after fade-out finishes, so vanishing buttons don't eat
-    // direction keys during the exit animation).
-    LaunchedEffect(showController, lastInteractionMs) {
+    // Focus handover — keyed ONLY on visibility, so button presses (which
+    // bump lastInteractionMs) never re-steal focus from the button row back
+    // to the progress bar. Reveal → progress bar (after enter composes);
+    // hide → page Box (after fade-out finishes, so vanishing buttons don't
+    // eat direction keys during the exit animation).
+    LaunchedEffect(showController) {
         if (showController) {
             controllerShownBefore = true
             delay(100L)
             try { progressFocusRequester.requestFocus() }
             catch (_: IllegalStateException) {}
-            delay(4000L)
-            showController = false
         } else if (controllerShownBefore) {
             delay(400L)
             try { focusRequester.requestFocus() }
             catch (_: IllegalStateException) {}
+        }
+    }
+    // Auto-hide after 4s of inactivity — lastInteractionMs is a key, so any
+    // bump (button press / progress seek) restarts the timer.
+    LaunchedEffect(showController, lastInteractionMs) {
+        if (showController) {
+            delay(4000L)
+            showController = false
         }
     }
     val bumpController = {
