@@ -49,14 +49,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -577,23 +572,12 @@ private fun ProgressBar(
 ) {
     val pct = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     var isFocused by remember { mutableStateOf(false) }
-    val barHeight = if (isFocused) 8.dp else 6.dp
+    // Focus feedback via height: 6dp idle -> 12dp focused (no glow).
+    val barHeight = if (isFocused) 12.dp else 6.dp
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(barHeight)
-            .drawBehind {
-                if (isFocused) {
-                    // Media-card style glow (white 15%), 16dp spread.
-                    val e = 16.dp.toPx()
-                    drawRoundRect(
-                        color = Color.White.copy(alpha = 0.15f),
-                        topLeft = Offset(-e, -e),
-                        size = Size(size.width + e * 2, size.height + e * 2),
-                        cornerRadius = CornerRadius(4.dp.toPx() + e, 4.dp.toPx() + e),
-                    )
-                }
-            }
             .focusRequester(focusRequester)
             .focusable()
             .onFocusChanged {
@@ -651,23 +635,12 @@ private fun ControllerButton(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     // Two-state background: transparent default, white 60% focused. Pressing
-    // keeps the same 60% (no extra darkening). Focused (or pressed) adds a
-    // high-intensity white glow matching the progress bar.
+    // keeps the same 60% (no extra darkening). No glow.
     val bgAlpha = if (isFocused) 0.6f else 0f
 
     Box(
         modifier = modifier
             .size(48.dp)
-            .drawBehind {
-                if (isFocused || isPressed) {
-                    // Media-card style glow (white 15%), 16dp spread.
-                    val e = 16.dp.toPx()
-                    drawCircle(
-                        color = Color.White.copy(alpha = 0.15f),
-                        radius = 24.dp.toPx() + e,
-                    )
-                }
-            }
             .background(Color.White.copy(alpha = bgAlpha), CircleShape)
             .focusable(interactionSource = interactionSource)
             .clickable(
