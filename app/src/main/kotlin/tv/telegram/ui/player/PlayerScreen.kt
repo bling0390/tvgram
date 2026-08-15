@@ -8,11 +8,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -78,8 +81,6 @@ import tv.telegram.td.FileDownloadState
 import tv.telegram.td.MediaItem
 import tv.telegram.td.MediaType
 import tv.telegram.ui.MainViewModel
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -514,7 +515,7 @@ private fun PlayerController(
                     onClick = onPrev,
                     modifier = Modifier.focusRequester(prevFocus),
                 )
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(24.dp))
             }
             ControllerButton(
                 icon = Icons.Default.Replay10,
@@ -522,17 +523,16 @@ private fun PlayerController(
                 onClick = onSeekBack,
                 modifier = Modifier.focusRequester(seekBackFocus),
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(24.dp))
             ControllerButton(
                 icon = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = stringResource(
                     if (playing) R.string.player_btn_pause else R.string.player_btn_play,
                 ),
                 onClick = onPlayPause,
-                emphasis = true,
                 modifier = Modifier.focusRequester(playFocus),
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(24.dp))
             ControllerButton(
                 icon = Icons.Default.Forward10,
                 contentDescription = stringResource(R.string.player_btn_seek_fwd),
@@ -540,7 +540,7 @@ private fun PlayerController(
                 modifier = Modifier.focusRequester(seekFwdFocus),
             )
             if (onNext != null) {
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(24.dp))
                 ControllerButton(
                     icon = Icons.Default.SkipNext,
                     contentDescription = stringResource(R.string.player_btn_next),
@@ -548,7 +548,7 @@ private fun PlayerController(
                     modifier = Modifier.focusRequester(nextFocus),
                 )
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(24.dp))
             ControllerButton(
                 icon = Icons.Default.Speed,
                 contentDescription = stringResource(R.string.player_btn_speed),
@@ -640,56 +640,50 @@ private fun ControllerButton(
     icon: ImageVector,
     contentDescription: String?,
     onClick: () -> Unit,
-    emphasis: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    var focused by remember { mutableStateOf(false) }
-    // Focus look matches the sidebar rail: dark circular chip + white icon,
-    // plus a low-intensity white glow halo behind the chip.
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    // Three-state background: transparent default, white 20% focused, white
+    // 80% pressed with a white glow. Drawn as a fixed-size circle so the icon
+    // is perfectly centered (no tv material3 Button default padding).
+    val bgAlpha = when {
+        isPressed -> 0.8f
+        isFocused -> 0.2f
+        else -> 0f
+    }
+
     Box(
         modifier = modifier
-            .size(52.dp)
-            .onFocusChanged { focused = it.hasFocus }
+            .size(48.dp)
             .then(
-                if (focused) {
+                if (isPressed) {
                     Modifier.shadow(
                         elevation = 14.dp,
                         shape = CircleShape,
-                        ambientColor = Color.White.copy(alpha = 0.40f),
-                        spotColor = Color.White.copy(alpha = 0.40f),
+                        ambientColor = Color.White.copy(alpha = 0.6f),
+                        spotColor = Color.White.copy(alpha = 0.6f),
                         clip = false,
                     )
                 } else Modifier,
+            )
+            .background(Color.White.copy(alpha = bgAlpha), CircleShape)
+            .focusable(interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Button(
-            onClick = onClick,
-            modifier = Modifier.size(48.dp),
-            shape = ButtonDefaults.shape(CircleShape, CircleShape, CircleShape),
-            contentPadding = PaddingValues(0.dp),
-            colors = if (emphasis) {
-                ButtonDefaults.colors(
-                    containerColor = Color(0xFFE53935),
-                    contentColor = Color.White,
-                    focusedContainerColor = Color(0xFF3A4A5C),
-                    focusedContentColor = Color.White,
-                )
-            } else {
-                ButtonDefaults.colors(
-                    containerColor = Color.White.copy(alpha = 0.15f),
-                    contentColor = Color.White,
-                    focusedContainerColor = Color(0xFF3A4A5C),
-                    focusedContentColor = Color.White,
-                )
-            },
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                modifier = Modifier.size(24.dp),
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(24.dp),
+        )
     }
 }
 
