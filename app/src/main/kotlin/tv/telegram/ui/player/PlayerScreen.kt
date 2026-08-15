@@ -57,6 +57,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -165,13 +166,15 @@ fun PlayerScreen(
         }
     }
 
-    // Live play state: ExoPlayer isn't compose state, so mirror isPlaying
-    // into a State so the play/pause icon flips immediately on toggle.
-    var nowPlaying by remember(current.fileId) { mutableStateOf(exo.isPlaying) }
+    // Live play state: mirror playWhenReady (user intent) into a State so the
+    // play/pause icon flips immediately on toggle. Using playWhenReady (not
+    // isPlaying) means seeking doesn't flicker the button — isPlaying goes
+    // false during BUFFERING after a seek, playWhenReady doesn't.
+    var nowPlaying by remember(current.fileId) { mutableStateOf(exo.playWhenReady) }
     LaunchedEffect(exo) {
         exo.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                nowPlaying = isPlaying
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                nowPlaying = playWhenReady
             }
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
@@ -248,6 +251,17 @@ fun PlayerScreen(
             .background(Color.Black)
             .focusRequester(focusRequester)
             .focusable()
+            // Capture-phase Back: intercept BEFORE the focused button/progress
+            // bar can consume it, so a single Back always hides the controller
+            // while it's visible. When hidden, fall through to BackHandler.
+            .onPreviewKeyEvent { ev ->
+                if (ev.type == KeyEventType.KeyDown && ev.key == Key.Back && showController) {
+                    showController = false
+                    true
+                } else {
+                    false
+                }
+            }
             .onKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (ev.key) {
@@ -419,16 +433,16 @@ private fun PlayerController(
         }
     }
 
-    // White translucent backdrop with a slightly brighter top edge (a low
-    // intensity white shadow/glow at the top of the controller).
+    // White translucent backdrop with a brighter top edge (a low intensity
+    // white shadow/glow at the top of the controller).
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        Color.White.copy(alpha = 0.25f),
-                        Color.White.copy(alpha = 0.08f),
+                        Color.White.copy(alpha = 0.5f),
+                        Color.White.copy(alpha = 0.1f),
                     ),
                 ),
             )
@@ -615,7 +629,7 @@ private fun ProgressBar(
                 modifier = Modifier
                     .fillMaxWidth(pct)
                     .height(barHeight)
-                    .background(Color(0xFFE53935), RoundedCornerShape(3.dp)),
+                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(3.dp)),
             )
         }
     }
