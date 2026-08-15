@@ -50,6 +50,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -164,8 +165,14 @@ fun PlayerScreen(
         }
     }
 
+    // Live play state: ExoPlayer isn't compose state, so mirror isPlaying
+    // into a State so the play/pause icon flips immediately on toggle.
+    var nowPlaying by remember(current.fileId) { mutableStateOf(exo.isPlaying) }
     LaunchedEffect(exo) {
         exo.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                nowPlaying = isPlaying
+            }
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
                     viewModel.clearPlayerPosition(current.fileId)
@@ -179,8 +186,6 @@ fun PlayerScreen(
             }
         })
     }
-
-    BackHandler(enabled = true) { onClose() }
 
     val focusRequester = remember { FocusRequester() }
     val progressFocusRequester = remember { FocusRequester() }
@@ -196,6 +201,9 @@ fun PlayerScreen(
     var showController by remember { mutableStateOf(false) }
     var lastInteractionMs by remember { mutableStateOf(System.currentTimeMillis()) }
     var controllerShownBefore by remember { mutableStateOf(false) }
+    // Auto-hide applies only while focus sits on the progress bar; focus on
+    // the button row keeps the controller up indefinitely.
+    var progressFocused by remember { mutableStateOf(false) }
     // Focus handover — keyed ONLY on visibility, so button presses (which
     // bump lastInteractionMs) never re-steal focus from the button row back
     // to the progress bar. Reveal → progress bar (after enter composes);
@@ -213,10 +221,10 @@ fun PlayerScreen(
             catch (_: IllegalStateException) {}
         }
     }
-    // Auto-hide after 4s of inactivity — lastInteractionMs is a key, so any
-    // bump (button press / progress seek) restarts the timer.
-    LaunchedEffect(showController, lastInteractionMs) {
-        if (showController) {
+    // Auto-hide: only while focus is on the progress bar, 4s after the last
+    // interaction (bump restarts the timer). Focus on buttons → no auto-hide.
+    LaunchedEffect(showController, lastInteractionMs, progressFocused) {
+        if (showController && progressFocused) {
             delay(4000L)
             showController = false
         }
@@ -224,6 +232,11 @@ fun PlayerScreen(
     val bumpController = {
         showController = true
         lastInteractionMs = System.currentTimeMillis()
+    }
+
+    // Back hides the controller first; a second Back leaves the player.
+    BackHandler(enabled = true) {
+        if (showController) showController = false else onClose()
     }
 
     @Suppress("UNUSED_VARIABLE")
@@ -307,9 +320,10 @@ fun PlayerScreen(
             PlayerController(
                 positionMs = { exo.currentPosition },
                 durationMs = { exo.duration.coerceAtLeast(0L) },
-                isPlaying = { exo.isPlaying },
+                isPlaying = { nowPlaying },
                 speed = speed,
                 progressFocusRequester = progressFocusRequester,
+                onProgressFocusChange = { progressFocused = it },
                 onInteraction = bumpController,
                 onHideController = { showController = false },
                 onPlayPause = {
@@ -349,6 +363,7 @@ private fun PlayerController(
     isPlaying: () -> Boolean,
     speed: Float,
     progressFocusRequester: FocusRequester,
+    onProgressFocusChange: (Boolean) -> Unit,
     onInteraction: () -> Unit,
     onHideController: () -> Unit,
     onPlayPause: () -> Unit,
@@ -404,10 +419,19 @@ private fun PlayerController(
         }
     }
 
+    // White translucent backdrop with a slightly brighter top edge (a low
+    // intensity white shadow/glow at the top of the controller).
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.55f))
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.25f),
+                        Color.White.copy(alpha = 0.08f),
+                    ),
+                ),
+            )
             .padding(horizontal = 24.dp, vertical = 16.dp),
     ) {
 
@@ -415,6 +439,7 @@ private fun PlayerController(
             positionMs = nowPos,
             durationMs = nowDur,
             focusRequester = progressFocusRequester,
+            onProgressFocusChange = onProgressFocusChange,
             onSeekBack = onSeekBack,
             onSeekFwd = onSeekFwd,
             onMoveDown = {
@@ -525,6 +550,7 @@ private fun ProgressBar(
     positionMs: Long,
     durationMs: Long,
     focusRequester: FocusRequester,
+    onProgressFocusChange: (Boolean) -> Unit,
     onSeekBack: () -> Unit,
     onSeekFwd: () -> Unit,
     onMoveDown: () -> Unit,
@@ -552,7 +578,10 @@ private fun ProgressBar(
             )
             .focusRequester(focusRequester)
             .focusable()
-            .onFocusChanged { isFocused = it.isFocused }
+            .onFocusChanged {
+                isFocused = it.isFocused
+                onProgressFocusChange(it.isFocused)
+            }
             .onKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (ev.key) {
