@@ -27,6 +27,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -224,13 +226,16 @@ fun PlayerScreen(
             .onKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (ev.key) {
-                    // Hidden mode: left/right seek without revealing the
-                    // controller (pure scrubbing on the invisible progress bar).
+                    // Hidden mode only: left/right seek. When the controller
+                    // is visible these keys belong to the progress bar / button
+                    // row (focus system), so don't swallow them here.
                     Key.DirectionLeft -> {
+                        if (showController) return@onKeyEvent false
                         exo.seekTo((exo.currentPosition - 10_000L).coerceAtLeast(0L))
                         true
                     }
                     Key.DirectionRight -> {
+                        if (showController) return@onKeyEvent false
                         exo.seekTo(
                             (exo.currentPosition + 10_000L)
                                 .coerceAtMost(exo.duration.coerceAtLeast(0L))
@@ -246,8 +251,9 @@ fun PlayerScreen(
                         true
                     }
                     // Reveal the controller; focus lands on the progress bar
-                    // (handled by the LaunchedEffect above).
+                    // (handled by the LaunchedEffect above). Hidden mode only.
                     Key.DirectionUp, Key.DirectionDown, Key.DirectionCenter, Key.Enter -> {
+                        if (showController) return@onKeyEvent false
                         showController = true
                         true
                     }
@@ -288,7 +294,6 @@ fun PlayerScreen(
                 durationMs = { exo.duration.coerceAtLeast(0L) },
                 isPlaying = { exo.isPlaying },
                 speed = speed,
-                positionText = "${index + 1} / ${mediaItems.size}",
                 progressFocusRequester = progressFocusRequester,
                 onHideController = { showController = false },
                 onPlayPause = {
@@ -327,7 +332,6 @@ private fun PlayerController(
     durationMs: () -> Long,
     isPlaying: () -> Boolean,
     speed: Float,
-    positionText: String,
     progressFocusRequester: FocusRequester,
     onHideController: () -> Unit,
     onPlayPause: () -> Unit,
@@ -337,16 +341,50 @@ private fun PlayerController(
     onPrev: (() -> Unit)?,
     onNext: (() -> Unit)?,
 ) {
-    val pos by remember {
-        derivedStateOf { positionMs() }
-    }
-    val dur by remember {
-        derivedStateOf { durationMs() }
-    }
     val playing by remember { derivedStateOf { isPlaying() } }
-    // Focus target for the play/pause button — the progress bar hands focus
-    // down here on DirectionDown.
-    val playPauseFocusRequester = remember { FocusRequester() }
+
+    // Live position/duration. ExoPlayer isn't compose state, so a ticker
+    // drives recomposition while the controller is on screen (it stops when
+    // AnimatedVisibility removes us from the tree).
+    var nowPos by remember { mutableLongStateOf(positionMs()) }
+    var nowDur by remember { mutableLongStateOf(durationMs()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowPos = positionMs()
+            nowDur = durationMs()
+            delay(500L)
+        }
+    }
+
+    // Explicit button-row navigation: one FocusRequester per visible button
+    // + selectedIndex. Left/right move between buttons via the row's
+    // onKeyEvent (works whether or not the native focus search consumes the
+    // key); Up returns to the progress bar.
+    val prevFocus = remember { FocusRequester() }
+    val seekBackFocus = remember { FocusRequester() }
+    val playFocus = remember { FocusRequester() }
+    val seekFwdFocus = remember { FocusRequester() }
+    val nextFocus = remember { FocusRequester() }
+    val speedFocus = remember { FocusRequester() }
+    val buttonFocuses = remember(onPrev, onNext) {
+        buildList {
+            if (onPrev != null) add(prevFocus)
+            add(seekBackFocus)
+            add(playFocus)
+            add(seekFwdFocus)
+            if (onNext != null) add(nextFocus)
+            add(speedFocus)
+        }
+    }
+    val playIndex = buttonFocuses.indexOf(playFocus)
+    var selectedIndex by remember { mutableIntStateOf(playIndex) }
+    fun select(delta: Int) {
+        val next = (selectedIndex + delta).coerceIn(0, buttonFocuses.lastIndex)
+        if (next != selectedIndex) {
+            selectedIndex = next
+            buttonFocuses[next].requestFocus()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -356,12 +394,15 @@ private fun PlayerController(
     ) {
 
         ProgressBar(
-            positionMs = pos,
-            durationMs = dur,
+            positionMs = nowPos,
+            durationMs = nowDur,
             focusRequester = progressFocusRequester,
             onSeekBack = onSeekBack,
             onSeekFwd = onSeekFwd,
-            onMoveDown = { playPauseFocusRequester.requestFocus() },
+            onMoveDown = {
+                selectedIndex = playIndex
+                playFocus.requestFocus()
+            },
             onHide = onHideController,
         )
         Spacer(Modifier.size(12.dp))
@@ -372,13 +413,8 @@ private fun PlayerController(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = stringResource(R.string.player_position, formatMs(pos), formatMs(dur)),
+                text = stringResource(R.string.player_position, formatMs(nowPos), formatMs(nowDur)),
                 color = Color.White,
-                fontSize = 14.sp,
-            )
-            Text(
-                text = positionText,
-                color = Color.White.copy(alpha = 0.7f),
                 fontSize = 14.sp,
             )
             Text(
@@ -391,30 +427,46 @@ private fun PlayerController(
         Spacer(Modifier.size(12.dp))
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onKeyEvent { ev ->
+                    if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    when (ev.key) {
+                        Key.DirectionLeft -> { select(-1); true }
+                        Key.DirectionRight -> { select(+1); true }
+                        Key.DirectionUp -> {
+                            try { progressFocusRequester.requestFocus() }
+                            catch (_: IllegalStateException) {}
+                            true
+                        }
+                        // Bottom row: Down is a no-op (consume it).
+                        Key.DirectionDown -> true
+                        else -> false
+                    }
+                },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
             if (onPrev != null) {
-                ControllerButton(label = stringResource(R.string.player_btn_prev), onClick = onPrev)
+                ControllerButton(label = stringResource(R.string.player_btn_prev), onClick = onPrev, modifier = Modifier.focusRequester(prevFocus))
                 Spacer(Modifier.width(12.dp))
             }
-            ControllerButton(label = stringResource(R.string.player_btn_seek_back), onClick = onSeekBack)
+            ControllerButton(label = stringResource(R.string.player_btn_seek_back), onClick = onSeekBack, modifier = Modifier.focusRequester(seekBackFocus))
             Spacer(Modifier.width(12.dp))
             ControllerButton(
                 label = if (playing) stringResource(R.string.player_btn_pause) else stringResource(R.string.player_btn_play),
                 onClick = onPlayPause,
                 emphasis = true,
-                modifier = Modifier.focusRequester(playPauseFocusRequester),
+                modifier = Modifier.focusRequester(playFocus),
             )
             Spacer(Modifier.width(12.dp))
-            ControllerButton(label = stringResource(R.string.player_btn_seek_fwd), onClick = onSeekFwd)
+            ControllerButton(label = stringResource(R.string.player_btn_seek_fwd), onClick = onSeekFwd, modifier = Modifier.focusRequester(seekFwdFocus))
             if (onNext != null) {
                 Spacer(Modifier.width(12.dp))
-                ControllerButton(label = stringResource(R.string.player_btn_next), onClick = onNext)
+                ControllerButton(label = stringResource(R.string.player_btn_next), onClick = onNext, modifier = Modifier.focusRequester(nextFocus))
             }
             Spacer(Modifier.width(12.dp))
-            ControllerButton(label = stringResource(R.string.player_btn_speed), onClick = onSpeedCycle)
+            ControllerButton(label = stringResource(R.string.player_btn_speed), onClick = onSpeedCycle, modifier = Modifier.focusRequester(speedFocus))
         }
     }
 }
