@@ -584,23 +584,15 @@ private fun ProgressBar(
             .height(barHeight)
             .drawBehind {
                 if (isFocused) {
-                    // High-intensity white glow drawn directly — colored
-                    // Modifier.shadow doesn't render on many TV GPUs.
-                    val r = 4.dp.toPx()
-                    val layers = listOf(
-                        10.dp to 0.22f,
-                        6.dp to 0.38f,
-                        3.dp to 0.58f,
+                    // Same restrained glow as the media-list cards
+                    // (CardDefaults.glow: elevation 3dp, white 15%).
+                    val e = 3.dp.toPx()
+                    drawRoundRect(
+                        color = Color.White.copy(alpha = 0.15f),
+                        topLeft = Offset(-e, -e),
+                        size = Size(size.width + e * 2, size.height + e * 2),
+                        cornerRadius = CornerRadius(4.dp.toPx() + e, 4.dp.toPx() + e),
                     )
-                    for ((expand, alpha) in layers) {
-                        val e = expand.toPx()
-                        drawRoundRect(
-                            color = Color.White.copy(alpha = alpha),
-                            topLeft = Offset(-e, -e),
-                            size = Size(size.width + e * 2, size.height + e * 2),
-                            cornerRadius = CornerRadius(r + e, r + e),
-                        )
-                    }
                 }
             }
             .focusRequester(focusRequester)
@@ -669,20 +661,13 @@ private fun ControllerButton(
             .size(48.dp)
             .drawBehind {
                 if (isFocused || isPressed) {
-                    // High-intensity white glow drawn directly (colored
-                    // Modifier.shadow doesn't render on many TV GPUs).
-                    val base = 24.dp.toPx()
-                    val layers = listOf(
-                        14.dp to 0.22f,
-                        8.dp to 0.38f,
-                        4.dp to 0.58f,
+                    // Same restrained glow as the media-list cards
+                    // (CardDefaults.glow: elevation 3dp, white 15%).
+                    val e = 3.dp.toPx()
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.15f),
+                        radius = 24.dp.toPx() + e,
                     )
-                    for ((expand, alpha) in layers) {
-                        drawCircle(
-                            color = Color.White.copy(alpha = alpha),
-                            radius = base + expand.toPx(),
-                        )
-                    }
                 }
             }
             .background(Color.White.copy(alpha = bgAlpha), CircleShape)
