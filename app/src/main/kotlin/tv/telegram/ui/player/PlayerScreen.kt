@@ -580,12 +580,12 @@ private fun ProgressBar(
             .height(barHeight)
             .then(
                 if (isFocused) {
-                    // Low-intensity white glow while focused, hugging the bar.
+                    // High-intensity white glow while focused, hugging the bar.
                     Modifier.shadow(
-                        elevation = 10.dp,
+                        elevation = 24.dp,
                         shape = RoundedCornerShape(4.dp),
-                        ambientColor = Color.White.copy(alpha = 0.35f),
-                        spotColor = Color.White.copy(alpha = 0.35f),
+                        ambientColor = Color.White.copy(alpha = 0.85f),
+                        spotColor = Color.White.copy(alpha = 0.85f),
                         clip = false,
                     )
                 } else Modifier,
