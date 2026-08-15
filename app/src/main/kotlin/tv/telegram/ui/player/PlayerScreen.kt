@@ -12,6 +12,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,7 +21,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -36,10 +46,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -457,25 +469,53 @@ private fun PlayerController(
             horizontalArrangement = Arrangement.Center,
         ) {
             if (onPrev != null) {
-                ControllerButton(label = stringResource(R.string.player_btn_prev), onClick = onPrev, modifier = Modifier.focusRequester(prevFocus))
+                ControllerButton(
+                    icon = Icons.Default.SkipPrevious,
+                    contentDescription = stringResource(R.string.player_btn_prev),
+                    onClick = onPrev,
+                    modifier = Modifier.focusRequester(prevFocus),
+                )
                 Spacer(Modifier.width(12.dp))
             }
-            ControllerButton(label = stringResource(R.string.player_btn_seek_back), onClick = onSeekBack, modifier = Modifier.focusRequester(seekBackFocus))
+            ControllerButton(
+                icon = Icons.Default.Replay10,
+                contentDescription = stringResource(R.string.player_btn_seek_back),
+                onClick = onSeekBack,
+                modifier = Modifier.focusRequester(seekBackFocus),
+            )
             Spacer(Modifier.width(12.dp))
             ControllerButton(
-                label = if (playing) stringResource(R.string.player_btn_pause) else stringResource(R.string.player_btn_play),
+                icon = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = stringResource(
+                    if (playing) R.string.player_btn_pause else R.string.player_btn_play,
+                ),
                 onClick = onPlayPause,
                 emphasis = true,
                 modifier = Modifier.focusRequester(playFocus),
             )
             Spacer(Modifier.width(12.dp))
-            ControllerButton(label = stringResource(R.string.player_btn_seek_fwd), onClick = onSeekFwd, modifier = Modifier.focusRequester(seekFwdFocus))
+            ControllerButton(
+                icon = Icons.Default.Forward10,
+                contentDescription = stringResource(R.string.player_btn_seek_fwd),
+                onClick = onSeekFwd,
+                modifier = Modifier.focusRequester(seekFwdFocus),
+            )
             if (onNext != null) {
                 Spacer(Modifier.width(12.dp))
-                ControllerButton(label = stringResource(R.string.player_btn_next), onClick = onNext, modifier = Modifier.focusRequester(nextFocus))
+                ControllerButton(
+                    icon = Icons.Default.SkipNext,
+                    contentDescription = stringResource(R.string.player_btn_next),
+                    onClick = onNext,
+                    modifier = Modifier.focusRequester(nextFocus),
+                )
             }
             Spacer(Modifier.width(12.dp))
-            ControllerButton(label = stringResource(R.string.player_btn_speed), onClick = onSpeedCycle, modifier = Modifier.focusRequester(speedFocus))
+            ControllerButton(
+                icon = Icons.Default.Speed,
+                contentDescription = stringResource(R.string.player_btn_speed),
+                onClick = onSpeedCycle,
+                modifier = Modifier.focusRequester(speedFocus),
+            )
         }
     }
 }
@@ -498,6 +538,18 @@ private fun ProgressBar(
         modifier = Modifier
             .fillMaxWidth()
             .height(barHeight)
+            .then(
+                if (isFocused) {
+                    // Low-intensity white glow while focused, hugging the bar.
+                    Modifier.shadow(
+                        elevation = 10.dp,
+                        shape = RoundedCornerShape(4.dp),
+                        ambientColor = Color.White.copy(alpha = 0.35f),
+                        spotColor = Color.White.copy(alpha = 0.35f),
+                        clip = false,
+                    )
+                } else Modifier,
+            )
             .focusRequester(focusRequester)
             .focusable()
             .onFocusChanged { isFocused = it.isFocused }
@@ -542,31 +594,59 @@ private fun ProgressBar(
 
 @Composable
 private fun ControllerButton(
-    label: String,
+    icon: ImageVector,
+    contentDescription: String?,
     onClick: () -> Unit,
     emphasis: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    Button(
-        onClick = onClick,
-        modifier = modifier,
-        colors = if (emphasis) {
-            ButtonDefaults.colors(
-                containerColor = Color(0xFFE53935),
-                contentColor = Color.White,
-                focusedContainerColor = Color(0xFFFF6F60),
-                focusedContentColor = Color.White,
-            )
-        } else {
-            ButtonDefaults.colors(
-                containerColor = Color.White.copy(alpha = 0.15f),
-                contentColor = Color.White,
-                focusedContainerColor = Color.White.copy(alpha = 0.30f),
-                focusedContentColor = Color.White,
-            )
-        },
+    var focused by remember { mutableStateOf(false) }
+    // Focus look matches the sidebar rail: dark circular chip + white icon,
+    // plus a low-intensity white glow halo behind the chip.
+    Box(
+        modifier = modifier
+            .size(52.dp)
+            .onFocusChanged { focused = it.hasFocus }
+            .then(
+                if (focused) {
+                    Modifier.shadow(
+                        elevation = 14.dp,
+                        shape = CircleShape,
+                        ambientColor = Color.White.copy(alpha = 0.40f),
+                        spotColor = Color.White.copy(alpha = 0.40f),
+                        clip = false,
+                    )
+                } else Modifier,
+            ),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Button(
+            onClick = onClick,
+            modifier = Modifier.size(48.dp),
+            shape = ButtonDefaults.shape(CircleShape, CircleShape, CircleShape),
+            contentPadding = PaddingValues(0.dp),
+            colors = if (emphasis) {
+                ButtonDefaults.colors(
+                    containerColor = Color(0xFFE53935),
+                    contentColor = Color.White,
+                    focusedContainerColor = Color(0xFF3A4A5C),
+                    focusedContentColor = Color.White,
+                )
+            } else {
+                ButtonDefaults.colors(
+                    containerColor = Color.White.copy(alpha = 0.15f),
+                    contentColor = Color.White,
+                    focusedContainerColor = Color(0xFF3A4A5C),
+                    focusedContentColor = Color.White,
+                )
+            },
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(24.dp),
+            )
+        }
     }
 }
 
