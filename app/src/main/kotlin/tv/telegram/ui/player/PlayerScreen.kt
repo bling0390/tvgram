@@ -220,6 +220,7 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .focusRequester(focusRequester)
+            .focusable()
             .onKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (ev.key) {
