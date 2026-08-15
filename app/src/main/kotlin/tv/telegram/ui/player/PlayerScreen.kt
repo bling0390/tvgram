@@ -258,8 +258,11 @@ fun PlayerScreen(
                         true
                     }
                     // Physical play keys toggle playback directly, no reveal.
+                    // In controller mode they still count as interaction so
+                    // the auto-hide timer restarts.
                     Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> {
                         if (exo.isPlaying) exo.pause() else exo.play()
+                        if (showController) bumpController()
                         true
                     }
                     // Speed cycle reveals the controller so the new rate shows.
@@ -295,6 +298,7 @@ fun PlayerScreen(
                 isPlaying = { exo.isPlaying },
                 speed = speed,
                 progressFocusRequester = progressFocusRequester,
+                onInteraction = bumpController,
                 onHideController = { showController = false },
                 onPlayPause = {
                     if (exo.isPlaying) exo.pause() else exo.play()
@@ -333,6 +337,7 @@ private fun PlayerController(
     isPlaying: () -> Boolean,
     speed: Float,
     progressFocusRequester: FocusRequester,
+    onInteraction: () -> Unit,
     onHideController: () -> Unit,
     onPlayPause: () -> Unit,
     onSeekBack: () -> Unit,
@@ -379,6 +384,7 @@ private fun PlayerController(
     val playIndex = buttonFocuses.indexOf(playFocus)
     var selectedIndex by remember { mutableIntStateOf(playIndex) }
     fun select(delta: Int) {
+        onInteraction()
         val next = (selectedIndex + delta).coerceIn(0, buttonFocuses.lastIndex)
         if (next != selectedIndex) {
             selectedIndex = next
@@ -400,10 +406,12 @@ private fun PlayerController(
             onSeekBack = onSeekBack,
             onSeekFwd = onSeekFwd,
             onMoveDown = {
+                onInteraction()
                 selectedIndex = playIndex
                 playFocus.requestFocus()
             },
             onHide = onHideController,
+            onInteraction = onInteraction,
         )
         Spacer(Modifier.size(12.dp))
 
@@ -435,12 +443,13 @@ private fun PlayerController(
                         Key.DirectionLeft -> { select(-1); true }
                         Key.DirectionRight -> { select(+1); true }
                         Key.DirectionUp -> {
+                            onInteraction()
                             try { progressFocusRequester.requestFocus() }
                             catch (_: IllegalStateException) {}
                             true
                         }
-                        // Bottom row: Down is a no-op (consume it).
-                        Key.DirectionDown -> true
+                        // Bottom row: Down is a no-op but still an interaction.
+                        Key.DirectionDown -> { onInteraction(); true }
                         else -> false
                     }
                 },
@@ -480,6 +489,7 @@ private fun ProgressBar(
     onSeekFwd: () -> Unit,
     onMoveDown: () -> Unit,
     onHide: () -> Unit,
+    onInteraction: () -> Unit,
 ) {
     val pct = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     var isFocused by remember { mutableStateOf(false) }
@@ -494,13 +504,14 @@ private fun ProgressBar(
             .onKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (ev.key) {
-                    Key.DirectionLeft -> { onSeekBack(); true }
-                    Key.DirectionRight -> { onSeekFwd(); true }
-                    Key.DirectionDown -> { onMoveDown(); true }
-                    Key.DirectionUp -> { onHide(); true }
+                    Key.DirectionLeft -> { onInteraction(); onSeekBack(); true }
+                    Key.DirectionRight -> { onInteraction(); onSeekFwd(); true }
+                    Key.DirectionDown -> { onInteraction(); onMoveDown(); true }
+                    Key.DirectionUp -> { onInteraction(); onHide(); true }
                     // OK on the progress bar: no-op by design (consume it so
-                    // it doesn't bubble up to the page-level handler).
-                    Key.DirectionCenter, Key.Enter -> true
+                    // it doesn't bubble up to the page-level handler), but it
+                    // still counts as interaction for the auto-hide timer.
+                    Key.DirectionCenter, Key.Enter -> { onInteraction(); true }
                     else -> false
                 }
             },
