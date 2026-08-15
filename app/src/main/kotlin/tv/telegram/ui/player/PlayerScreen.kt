@@ -646,14 +646,9 @@ private fun ControllerButton(
     val isFocused by interactionSource.collectIsFocusedAsState()
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Three-state background: transparent default, white 20% focused, white
-    // 80% pressed with a white glow. Drawn as a fixed-size circle so the icon
-    // is perfectly centered (no tv material3 Button default padding).
-    val bgAlpha = when {
-        isPressed -> 0.8f
-        isFocused -> 0.2f
-        else -> 0f
-    }
+    // Two-state background: transparent default, white 60% focused. Pressing
+    // keeps the same 60% (no extra darkening) but adds a white glow.
+    val bgAlpha = if (isFocused) 0.6f else 0f
 
     Box(
         modifier = modifier
