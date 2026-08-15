@@ -572,19 +572,29 @@ private fun ProgressBar(
     val pct = if (durationMs > 0L) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    // Focus feedback via height: 6dp idle -> 12dp focused (no glow).
-    val barHeight = if (isFocused) 12.dp else 6.dp
+    // Focus feedback via height: 6dp idle -> 10dp focused (no glow). The bar
+    // lives in a fixed-height wrapper so the controller's overall height
+    // stays constant regardless of focus state.
+    val barHeight = if (isFocused) 10.dp else 6.dp
     // Report focus state for auto-hide logic.
     LaunchedEffect(isFocused) {
         onProgressFocusChange(isFocused)
     }
+    // Fixed-height wrapper: progress bar grows inside without shifting the
+    // controller layout (time row / button row stay put).
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(barHeight)
-            .focusRequester(focusRequester)
-            .focusable(interactionSource = interactionSource)
-            .onKeyEvent { ev ->
+            .height(12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(barHeight)
+                .focusRequester(focusRequester)
+                .focusable(interactionSource = interactionSource)
+                .onKeyEvent { ev ->
                 if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (ev.key) {
                     Key.DirectionLeft -> { onInteraction(); onSeekBack(); true }
@@ -606,21 +616,22 @@ private fun ProgressBar(
                 .border(
                     width = if (isFocused) 2.dp else 0.dp,
                     color = Color.White.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(3.dp),
+                    shape = RoundedCornerShape(50),
                 )
                 .background(
                     if (isFocused) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.2f),
-                    RoundedCornerShape(3.dp),
+                    RoundedCornerShape(50),
                 ),
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(pct)
                     .height(barHeight)
-                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(3.dp)),
+                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(50)),
             )
         }
     }
+}
 }
 
 @Composable
