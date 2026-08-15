@@ -584,9 +584,8 @@ private fun ProgressBar(
             .height(barHeight)
             .drawBehind {
                 if (isFocused) {
-                    // Same restrained glow as the media-list cards
-                    // (CardDefaults.glow: elevation 3dp, white 15%).
-                    val e = 3.dp.toPx()
+                    // Media-card style glow (white 15%), 16dp spread.
+                    val e = 16.dp.toPx()
                     drawRoundRect(
                         color = Color.White.copy(alpha = 0.15f),
                         topLeft = Offset(-e, -e),
@@ -661,9 +660,8 @@ private fun ControllerButton(
             .size(48.dp)
             .drawBehind {
                 if (isFocused || isPressed) {
-                    // Same restrained glow as the media-list cards
-                    // (CardDefaults.glow: elevation 3dp, white 15%).
-                    val e = 3.dp.toPx()
+                    // Media-card style glow (white 15%), 16dp spread.
+                    val e = 16.dp.toPx()
                     drawCircle(
                         color = Color.White.copy(alpha = 0.15f),
                         radius = 24.dp.toPx() + e,
