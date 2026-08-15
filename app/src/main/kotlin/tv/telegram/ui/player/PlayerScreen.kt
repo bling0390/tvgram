@@ -647,19 +647,20 @@ private fun ControllerButton(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     // Two-state background: transparent default, white 60% focused. Pressing
-    // keeps the same 60% (no extra darkening) but adds a white glow.
+    // keeps the same 60% (no extra darkening). Focused (or pressed) adds a
+    // high-intensity white glow matching the progress bar.
     val bgAlpha = if (isFocused) 0.6f else 0f
 
     Box(
         modifier = modifier
             .size(48.dp)
             .then(
-                if (isPressed) {
+                if (isFocused || isPressed) {
                     Modifier.shadow(
-                        elevation = 14.dp,
+                        elevation = 24.dp,
                         shape = CircleShape,
-                        ambientColor = Color.White.copy(alpha = 0.6f),
-                        spotColor = Color.White.copy(alpha = 0.6f),
+                        ambientColor = Color.White.copy(alpha = 0.85f),
+                        spotColor = Color.White.copy(alpha = 0.85f),
                         clip = false,
                     )
                 } else Modifier,
